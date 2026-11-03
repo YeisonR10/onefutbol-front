@@ -128,6 +128,8 @@ export const authApi = {
 };
 
 export const usersApi = {
+  getOwn: () => client.get('/api/users/me'),
+  updateOwn: (data) => client.put('/api/users/me', data),
   getAll: () => client.get('/api/users'),
   getWithoutRoles: () => client.get('/api/users/without-roles'),
   getById: (id) => client.get(`/api/users/${id}`),
@@ -145,6 +147,8 @@ export const usersApi = {
 };
 
 export const profileApi = {
+  getOwn: () => client.get('/api/users/me/profile'),
+  saveOwn: (data) => client.put('/api/users/me/profile', data),
   getByUserId: (userId) => client.get(`/api/users/${userId}/profile`),
   create: (userId, data) => client.post(`/api/users/${userId}/profile`, data),
   update: (userId, data) => client.put(`/api/users/${userId}/profile`, data),

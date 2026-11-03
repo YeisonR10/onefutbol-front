@@ -113,7 +113,7 @@ export function AuthProvider({ children }) {
   const refreshUserProfile = useCallback(async () => {
     if (!user?.id) return;
 
-    const response = await usersApi.getById(user.id);
+    const response = await usersApi.getOwn();
     const profile = response?.user || response?.data || response;
     if (!profile?.name) {
       throw new Error('El servidor no devolvió el nombre del usuario');

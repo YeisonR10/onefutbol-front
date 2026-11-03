@@ -29,8 +29,8 @@ export default function ProfileAccess({ placement = 'header' }) {
     setLoading(true);
     try {
       const [profileResult, userResult] = await Promise.allSettled([
-        profileApi.getByUserId(user.id),
-        usersApi.getById(user.id),
+        profileApi.getOwn(),
+        usersApi.getOwn(),
       ]);
       const result = profileResult.status === 'fulfilled' ? profileResult.value : null;
       const current = result?.profile || result?.data || result;
@@ -74,15 +74,13 @@ export default function ProfileAccess({ placement = 'header' }) {
     if (!user?.id) return;
     setSaving(true);
     try {
-      await usersApi.update(user.id, { name: userForm.name, email: userForm.email });
+      await usersApi.updateOwn({ name: userForm.name, email: userForm.email });
       const payload = {
         phone: form.phone,
         birthDate: form.birthDate,
         photo: form.photo || null,
       };
-      const updatedProfile = profile
-        ? await profileApi.update(user.id, payload)
-        : await profileApi.create(user.id, payload);
+      const updatedProfile = await profileApi.saveOwn(payload);
       setProfile(updatedProfile || payload);
       await refreshUserProfile();
       showToast('Perfil actualizado correctamente', 'success');
@@ -154,8 +152,8 @@ export default function ProfileAccess({ placement = 'header' }) {
             <div className="profile-form-section">
               <span className="profile-section-title"><PencilLine size={16} /> Información personal</span>
               <div className="profile-form-grid">
-                <div><label htmlFor={`profile-phone-${placement}`}>Teléfono</label><div className="profile-input-icon"><Phone size={16} /><input id={`profile-phone-${placement}`} type="tel" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value.replace(/\D/g, '') })} placeholder="Añadir teléfono" /></div></div>
-                <div><label htmlFor={`profile-birth-${placement}`}>Fecha de nacimiento</label><div className="profile-input-icon"><CalendarDays size={16} /><input id={`profile-birth-${placement}`} type="date" value={form.birthDate} onChange={(event) => setForm({ ...form, birthDate: event.target.value })} /></div></div>
+                <div><label htmlFor={`profile-phone-${placement}`}>Teléfono *</label><div className="profile-input-icon"><Phone size={16} /><input id={`profile-phone-${placement}`} type="tel" minLength={7} maxLength={15} pattern="[0-9]{7,15}" title="Ingresa entre 7 y 15 dígitos" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value.replace(/\D/g, '') })} placeholder="Entre 7 y 15 dígitos" required /></div></div>
+                <div><label htmlFor={`profile-birth-${placement}`}>Fecha de nacimiento *</label><div className="profile-input-icon"><CalendarDays size={16} /><input id={`profile-birth-${placement}`} type="date" max={new Date().toISOString().slice(0, 10)} value={form.birthDate} onChange={(event) => setForm({ ...form, birthDate: event.target.value })} required /></div></div>
                 <div className="profile-photo-field"><label htmlFor={`profile-photo-${placement}`}>Foto de perfil · URL</label><div className="profile-input-icon"><Camera size={16} /><input id={`profile-photo-${placement}`} type="url" value={form.photo} onChange={(event) => setForm({ ...form, photo: event.target.value })} placeholder="https://..." /></div></div>
               </div>
             </div>

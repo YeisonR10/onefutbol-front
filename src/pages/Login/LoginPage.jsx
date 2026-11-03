@@ -21,6 +21,9 @@ async function createPkcePair() {
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [twoFA, setTwoFA] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -30,7 +33,7 @@ export default function LoginPage() {
   const [twoFACode, setTwoFACode] = useState('');
   const [challengeId, setChallengeId] = useState('');
 
-  const { login, verify2FA, isAuthenticated } = useAuth();
+  const { login, verify2FA, register, isAuthenticated } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -45,6 +48,28 @@ export default function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage('');
+
+    if (isRegistering) {
+      if (!name.trim() || !email.trim() || !password) {
+        setErrorMessage('Por favor complete el nombre, correo electrónico y contraseña.');
+        return;
+      }
+
+      setLoading(true);
+      try {
+        await register(name.trim(), email.trim(), password, twoFA);
+        showToast('Cuenta registrada correctamente. Ya puede iniciar sesión.', 'success');
+        setIsRegistering(false);
+        setPassword('');
+      } catch (err) {
+        const msg = err.message || 'No se pudo registrar la cuenta.';
+        setErrorMessage(msg);
+        showToast(msg, 'error');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
 
     if (is2FAStep) {
       if (!twoFACode.trim()) {
@@ -96,6 +121,12 @@ export default function LoginPage() {
     setIs2FAStep(false);
     setTwoFACode('');
     setErrorMessage('');
+  };
+
+  const handleToggleRegistration = () => {
+    setIsRegistering((prev) => !prev);
+    setErrorMessage('');
+    setPassword('');
   };
 
   const handleOAuthLogin = async (provider) => {
@@ -230,7 +261,11 @@ export default function LoginPage() {
             }}
           >
             <ShieldCheck size={16} color="var(--accent)" />
-            {is2FAStep ? 'Verificación en Dos Pasos (2FA)' : 'Plataforma de Autenticación y Control de Acceso'}
+            {is2FAStep
+              ? 'Verificación en Dos Pasos (2FA)'
+              : isRegistering
+                ? 'Crear una cuenta'
+                : 'Plataforma de Autenticación y Control de Acceso'}
           </p>
         </div>
 
@@ -260,6 +295,21 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {!is2FAStep ? (
             <>
+              {isRegistering && (
+                <div>
+                  <label htmlFor="register-name">Nombre completo</label>
+                  <input
+                    id="register-name"
+                    type="text"
+                    required
+                    placeholder="Tu nombre"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    autoComplete="name"
+                  />
+                </div>
+              )}
+
               <div>
                 <label htmlFor="login-email">Correo Electrónico</label>
                 <div style={{ position: 'relative' }}>
@@ -299,7 +349,7 @@ export default function LoginPage() {
                     placeholder="••••••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    autoComplete="current-password"
+                    autoComplete={isRegistering ? 'new-password' : 'current-password'}
                     style={{ paddingLeft: '40px', paddingRight: '40px' }}
                   />
                   <Lock
@@ -335,6 +385,30 @@ export default function LoginPage() {
                 </div>
               </div>
 
+              {isRegistering && (
+                <label
+                  htmlFor="register-two-fa"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '10px',
+                    color: 'var(--text-secondary)',
+                    fontSize: '0.86rem',
+                    lineHeight: 1.4,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <input
+                    id="register-two-fa"
+                    type="checkbox"
+                    checked={twoFA}
+                    onChange={(e) => setTwoFA(e.target.checked)}
+                    style={{ width: '16px', height: '16px', marginTop: '2px' }}
+                  />
+                  <span>Activar segundo factor de autenticación (2FA)</span>
+                </label>
+              )}
+
               <button
                 type="submit"
                 className="btn btn-primary btn-lg"
@@ -349,39 +423,59 @@ export default function LoginPage() {
                 {loading ? (
                   <>
                     <span className="spinner" style={{ borderTopColor: '#000' }}></span>
-                    <span>Iniciando sesión...</span>
+                    <span>{isRegistering ? 'Registrando cuenta...' : 'Iniciando sesión...'}</span>
                   </>
                 ) : (
-                  'Iniciar sesión'
+                  isRegistering ? 'Crear cuenta' : 'Iniciar sesión'
                 )}
               </button>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: 'var(--text-muted)', fontSize: '0.78rem' }}>
-                <span style={{ height: 1, flex: 1, background: 'var(--border)' }} />
-                <span>O continúa con</span>
-                <span style={{ height: 1, flex: 1, background: 'var(--border)' }} />
-              </div>
+              {!isRegistering && (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                    <span style={{ height: 1, flex: 1, background: 'var(--border)' }} />
+                    <span>O continúa con</span>
+                    <span style={{ height: 1, flex: 1, background: 'var(--border)' }} />
+                  </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: -8 }}>
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  onClick={() => handleOAuthLogin('google')}
-                  disabled={loading}
-                  style={{ minHeight: 44, width: '100%' }}
-                >
-                  <Chrome size={18} /> Google
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  onClick={() => handleOAuthLogin('github')}
-                  disabled={loading}
-                  style={{ minHeight: 44, width: '100%' }}
-                >
-                  <Github size={18} /> GitHub
-                </button>
-              </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: -8 }}>
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      onClick={() => handleOAuthLogin('google')}
+                      disabled={loading}
+                      style={{ minHeight: 44, width: '100%' }}
+                    >
+                      <Chrome size={18} /> Google
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      onClick={() => handleOAuthLogin('github')}
+                      disabled={loading}
+                      style={{ minHeight: 44, width: '100%' }}
+                    >
+                      <Github size={18} /> GitHub
+                    </button>
+                  </div>
+                </>
+              )}
+
+              <button
+                type="button"
+                onClick={handleToggleRegistration}
+                disabled={loading}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--accent)',
+                  cursor: 'pointer',
+                  fontSize: '0.86rem',
+                  padding: '6px',
+                }}
+              >
+                {isRegistering ? '¿Ya tienes una cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate'}
+              </button>
             </>
           ) : (
             <>

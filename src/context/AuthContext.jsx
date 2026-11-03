@@ -163,8 +163,8 @@ export function AuthProvider({ children }) {
     return completeLogin(jwtToken, decoded?.email || '', response);
   };
 
-  const register = async (name, email, password) => {
-    return await authApi.register({ name, email, password });
+  const register = async (name, email, password, twoFA = false) => {
+    return await authApi.register({ name, email, password, twoFA });
   };
 
   const logout = () => {

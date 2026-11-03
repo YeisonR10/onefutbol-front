@@ -13,6 +13,7 @@ import {
   Calendar,
   Image,
   Shield,
+  ShieldCheck,
   PlusCircle,
   Monitor,
   Check,
@@ -272,6 +273,49 @@ export default function UsersPage() {
     });
   };
 
+  const handleToggleTwoFA = (user) => {
+    const isActivating = !user.twoFA;
+    setConfirmDialog({
+      isOpen: true,
+      title: isActivating ? 'Activar segundo factor' : 'Desactivar segundo factor',
+      message: isActivating
+        ? `¿Desea activar el segundo factor de autorización para "${user.name}"?`
+        : `¿Desea desactivar el segundo factor de autorización para "${user.name}"?`,
+      confirmText: isActivating ? 'Activar segundo factor' : 'Desactivar segundo factor',
+      variant: isActivating ? 'primary' : 'warning',
+      onConfirm: async () => {
+        setConfirmLoading(true);
+        try {
+          if (isActivating) {
+            await usersApi.activate2FA(user.id);
+          } else {
+            await usersApi.deactivate2FA(user.id);
+          }
+          showToast(
+            `Segundo factor ${isActivating ? 'activado' : 'desactivado'} para "${user.name}"`,
+            'success'
+          );
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+          setUsers((prev) =>
+            prev.map((item) =>
+              item.id === user.id ? { ...item, twoFA: isActivating } : item
+            )
+          );
+          if (selectedUser?.id === user.id) {
+            setSelectedUser((prev) => ({ ...prev, twoFA: isActivating }));
+            setSelectedUserDetail((prev) =>
+              prev ? { ...prev, twoFA: isActivating } : prev
+            );
+          }
+        } catch (err) {
+          showToast(err.message || 'Error al cambiar el segundo factor', 'error');
+        } finally {
+          setConfirmLoading(false);
+        }
+      },
+    });
+  };
+
   // Delete User
   const handleDeleteUser = (user) => {
     setConfirmDialog({
@@ -467,7 +511,7 @@ export default function UsersPage() {
     {
       key: 'actions',
       label: 'Acciones',
-      width: '190px',
+      width: '220px',
       align: 'right',
       render: (u) => (
         <div
@@ -499,6 +543,20 @@ export default function UsersPage() {
             title={u.active ? 'Desactivar usuario' : 'Activar usuario'}
           >
             <Power size={17} color={u.active ? '#22c55e' : '#94a3b8'} />
+          </button>
+
+          <button
+            type="button"
+            className="btn-icon"
+            onClick={() => handleToggleTwoFA(u)}
+            title={u.twoFA ? 'Desactivar segundo factor' : 'Activar segundo factor'}
+            aria-label={u.twoFA ? 'Desactivar segundo factor' : 'Activar segundo factor'}
+          >
+            {u.twoFA ? (
+              <ShieldCheck size={17} color="#22c55e" />
+            ) : (
+              <Shield size={17} color="#94a3b8" />
+            )}
           </button>
 
           <button
@@ -1107,4 +1165,3 @@ export default function UsersPage() {
     </div>
   );
 }
-

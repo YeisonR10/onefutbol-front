@@ -135,6 +135,8 @@ export const usersApi = {
   delete: (id) => client.delete(`/api/users/${id}`),
   deactivate: (id) => client.patch(`/api/users/${id}/deactivate`),
   activate: (id) => client.patch(`/api/users/${id}/activate`),
+  activate2FA: (id) => client.patch(`/api/users/${id}/2fa/activate`),
+  deactivate2FA: (id) => client.patch(`/api/users/${id}/2fa/desactivate`),
 };
 
 export const profileApi = {
@@ -153,8 +155,19 @@ export const rolesApi = {
   delete: (id) => client.delete(`/api/roles/${id}`),
 };
 
+function normalizePermissionMethod(permission) {
+  const url = permission.url?.replace(/\/+$/, '');
+  if (/\/[^/]+\/2fa\/(?:activate|desactivate)$/i.test(url || '')) {
+    return { ...permission, method: 'PATCH' };
+  }
+  return permission;
+}
+
 export const permissionsApi = {
-  getAll: () => client.get('/api/permissions'),
+  getAll: async () => {
+    const permissions = await client.get('/api/permissions');
+    return (permissions || []).map(normalizePermissionMethod);
+  },
   getById: (id) => client.get(`/api/permissions/${id}`),
   create: (data) => client.post('/api/permissions', data),
   update: (id, data) => client.put(`/api/permissions/${id}`, data),

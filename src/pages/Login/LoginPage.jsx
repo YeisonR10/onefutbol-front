@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Trophy, Mail, Lock, Eye, EyeOff, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Trophy, Mail, Lock, Eye, EyeOff, ShieldCheck, AlertCircle, KeyRound, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../components/common/Toast';
 
@@ -11,7 +11,12 @@ export default function LoginPage() {
   const [errorMessage, setErrorMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { login, isAuthenticated } = useAuth();
+  // 2FA state
+  const [is2FAStep, setIs2FAStep] = useState(false);
+  const [twoFACode, setTwoFACode] = useState('');
+  const [challengeId, setChallengeId] = useState('');
+
+  const { login, verify2FA, isAuthenticated } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -27,6 +32,27 @@ export default function LoginPage() {
     e.preventDefault();
     setErrorMessage('');
 
+    if (is2FAStep) {
+      if (!twoFACode.trim()) {
+        setErrorMessage('Por favor ingrese el código de verificación.');
+        return;
+      }
+
+      setLoading(true);
+      try {
+        await verify2FA(twoFACode.trim(), challengeId, email.trim());
+        showToast('¡Bienvenido a OneSports Security!', 'success');
+        navigate('/');
+      } catch (err) {
+        const msg = err.message || 'Código de verificación inválido, expirado o ya utilizado.';
+        setErrorMessage(msg);
+        showToast(msg, 'error');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     if (!email.trim() || !password) {
       setErrorMessage('Por favor ingrese su correo electrónico y contraseña.');
       return;
@@ -34,9 +60,15 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      await login(email.trim(), password);
-      showToast('¡Bienvenido a SportManager Security!', 'success');
-      navigate('/');
+      const result = await login(email.trim(), password);
+      if (result?.requires2FA) {
+        setIs2FAStep(true);
+        setChallengeId(result.challengeId || '');
+        showToast('Código de verificación 2FA enviado al correo.', 'info');
+      } else {
+        showToast('¡Bienvenido a OneSports Security!', 'success');
+        navigate('/');
+      }
     } catch (err) {
       const msg = err.message || 'Credenciales inválidas o error en el servidor.';
       setErrorMessage(msg);
@@ -44,6 +76,12 @@ export default function LoginPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleBackToLogin = () => {
+    setIs2FAStep(false);
+    setTwoFACode('');
+    setErrorMessage('');
   };
 
   return (
@@ -111,7 +149,7 @@ export default function LoginPage() {
               marginBottom: '16px',
             }}
           >
-            <Trophy size={36} strokeWidth={2.4} />
+            {is2FAStep ? <ShieldCheck size={36} strokeWidth={2.4} /> : <Trophy size={36} strokeWidth={2.4} />}
           </div>
 
           <h1
@@ -123,7 +161,7 @@ export default function LoginPage() {
               lineHeight: 1.2,
             }}
           >
-            SPORT<span style={{ color: 'var(--accent)' }}>MANAGER</span>
+            ONE<span style={{ color: 'var(--accent)' }}>SPORTS</span>
           </h1>
 
           <p
@@ -138,7 +176,7 @@ export default function LoginPage() {
             }}
           >
             <ShieldCheck size={16} color="var(--accent)" />
-            Plataforma de Autenticación y Control de Acceso
+            {is2FAStep ? 'Verificación en Dos Pasos (2FA)' : 'Plataforma de Autenticación y Control de Acceso'}
           </p>
         </div>
 
@@ -166,101 +204,197 @@ export default function LoginPage() {
 
         {/* Form */}
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div>
-            <label htmlFor="login-email">Correo Electrónico</label>
-            <div style={{ position: 'relative' }}>
-              <input
-                id="login-email"
-                type="email"
-                required
-                placeholder="ej. admin@onesports.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="email"
-                style={{ paddingLeft: '40px' }}
-              />
-              <Mail
-                size={18}
-                color="#64748b"
-                style={{
-                  position: 'absolute',
-                  left: '12px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  pointerEvents: 'none',
-                }}
-              />
-            </div>
-          </div>
+          {!is2FAStep ? (
+            <>
+              <div>
+                <label htmlFor="login-email">Correo Electrónico</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    id="login-email"
+                    type="email"
+                    required
+                    placeholder="ej. admin@onesports.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="email"
+                    style={{ paddingLeft: '40px' }}
+                  />
+                  <Mail
+                    size={18}
+                    color="#64748b"
+                    style={{
+                      position: 'absolute',
+                      left: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      pointerEvents: 'none',
+                    }}
+                  />
+                </div>
+              </div>
 
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <label htmlFor="login-password">Contraseña</label>
-            </div>
-            <div style={{ position: 'relative' }}>
-              <input
-                id="login-password"
-                type={showPassword ? 'text' : 'password'}
-                required
-                placeholder="••••••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-                style={{ paddingLeft: '40px', paddingRight: '40px' }}
-              />
-              <Lock
-                size={18}
-                color="#64748b"
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label htmlFor="login-password">Contraseña</label>
+                </div>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    id="login-password"
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    placeholder="••••••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="current-password"
+                    style={{ paddingLeft: '40px', paddingRight: '40px' }}
+                  />
+                  <Lock
+                    size={18}
+                    color="#64748b"
+                    style={{
+                      position: 'absolute',
+                      left: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      pointerEvents: 'none',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    style={{
+                      position: 'absolute',
+                      right: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#64748b',
+                      cursor: 'pointer',
+                      display: 'flex',
+                    }}
+                    tabIndex="-1"
+                    title={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="btn btn-primary btn-lg"
+                disabled={loading}
                 style={{
-                  position: 'absolute',
-                  left: '12px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  pointerEvents: 'none',
+                  marginTop: '8px',
+                  width: '100%',
+                  fontSize: '0.98rem',
+                  fontWeight: 700,
                 }}
-              />
+              >
+                {loading ? (
+                  <>
+                    <span className="spinner" style={{ borderTopColor: '#000' }}></span>
+                    <span>Iniciando sesión...</span>
+                  </>
+                ) : (
+                  'Iniciar sesión'
+                )}
+              </button>
+            </>
+          ) : (
+            <>
+              <div
+                style={{
+                  padding: '12px 14px',
+                  backgroundColor: 'rgba(34, 197, 94, 0.08)',
+                  border: '1px solid rgba(34, 197, 94, 0.25)',
+                  borderRadius: '8px',
+                  fontSize: '0.85rem',
+                  color: '#86efac',
+                  lineHeight: '1.4',
+                }}
+              >
+                Se ha enviado un código de seguridad de 6 dígitos a tu correo electrónico. Ingrésalo a continuación para completar el acceso.
+              </div>
+
+              <div>
+                <label htmlFor="login-2fa">Código de Verificación (6 dígitos)</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    id="login-2fa"
+                    type="text"
+                    required
+                    maxLength={6}
+                    placeholder="123456"
+                    value={twoFACode}
+                    onChange={(e) => setTwoFACode(e.target.value.replace(/\D/g, ''))}
+                    autoComplete="one-time-code"
+                    autoFocus
+                    style={{
+                      paddingLeft: '40px',
+                      fontSize: '1.3rem',
+                      letterSpacing: '0.3em',
+                      textAlign: 'center',
+                    }}
+                  />
+                  <KeyRound
+                    size={18}
+                    color="#64748b"
+                    style={{
+                      position: 'absolute',
+                      left: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      pointerEvents: 'none',
+                    }}
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="btn btn-primary btn-lg"
+                disabled={loading || twoFACode.length < 6}
+                style={{
+                  marginTop: '8px',
+                  width: '100%',
+                  fontSize: '0.98rem',
+                  fontWeight: 700,
+                }}
+              >
+                {loading ? (
+                  <>
+                    <span className="spinner" style={{ borderTopColor: '#000' }}></span>
+                    <span>Verificando...</span>
+                  </>
+                ) : (
+                  'Verificar código'
+                )}
+              </button>
+
               <button
                 type="button"
-                onClick={() => setShowPassword(!showPassword)}
+                onClick={handleBackToLogin}
+                disabled={loading}
                 style={{
-                  position: 'absolute',
-                  right: '12px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
                   background: 'transparent',
                   border: 'none',
-                  color: '#64748b',
-                  cursor: 'pointer',
+                  color: 'var(--text-secondary)',
                   display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  fontSize: '0.86rem',
+                  cursor: 'pointer',
+                  padding: '6px',
+                  marginTop: '-4px',
                 }}
-                tabIndex="-1"
-                title={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
               >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                <ArrowLeft size={16} /> Volver a ingresar credenciales
               </button>
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            className="btn btn-primary btn-lg"
-            disabled={loading}
-            style={{
-              marginTop: '8px',
-              width: '100%',
-              fontSize: '0.98rem',
-              fontWeight: 700,
-            }}
-          >
-            {loading ? (
-              <>
-                <span className="spinner" style={{ borderTopColor: '#000' }}></span>
-                <span>Iniciando sesión...</span>
-              </>
-            ) : (
-              'Iniciar sesión'
-            )}
-          </button>
+            </>
+          )}
         </form>
 
         {/* Footer info */}
@@ -274,10 +408,9 @@ export default function LoginPage() {
             color: 'var(--text-muted)',
           }}
         >
-          <span>OneSports Microservice Security &bull; Puerto 8080</span>
+          <span>OneSports Microservice Security &bull; Puerto 8181</span>
         </div>
       </div>
     </div>
   );
 }
-

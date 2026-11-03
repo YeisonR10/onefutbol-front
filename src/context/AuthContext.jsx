@@ -63,13 +63,7 @@ export function AuthProvider({ children }) {
     setLoading(false);
   }, []);
 
-  const login = async (email, password) => {
-    const response = await authApi.login({ email, password });
-    const jwtToken = response.accessToken || response.token;
-    if (!jwtToken) {
-      throw new Error('No se recibió token de autenticación del servidor');
-    }
-
+  const completeLogin = (jwtToken, email, response = {}) => {
     const decoded = parseJwt(jwtToken);
     const resolvedEmail = decoded?.sub || email;
     const resolvedUser = {
@@ -89,6 +83,35 @@ export function AuthProvider({ children }) {
     return resolvedUser;
   };
 
+  const login = async (email, password) => {
+    const response = await authApi.login({ email, password });
+
+    if (response?.requires2FA) {
+      return {
+        requires2FA: true,
+        challengeId: response.challengeId,
+        email,
+      };
+    }
+
+    const jwtToken = response.accessToken || response.token;
+    if (!jwtToken) {
+      throw new Error('No se recibió token de autenticación del servidor');
+    }
+
+    return completeLogin(jwtToken, email, response);
+  };
+
+  const verify2FA = async (code, challengeId, email) => {
+    const response = await authApi.verify2FA({ code }, challengeId);
+    const jwtToken = response.accessToken || response.token;
+    if (!jwtToken) {
+      throw new Error('No se recibió token de autenticación tras verificar el código 2FA');
+    }
+
+    return completeLogin(jwtToken, email, response);
+  };
+
   const register = async (name, email, password) => {
     return await authApi.register({ name, email, password });
   };
@@ -106,6 +129,7 @@ export function AuthProvider({ children }) {
     loading,
     isAuthenticated: !!token,
     login,
+    verify2FA,
     register,
     logout,
   };

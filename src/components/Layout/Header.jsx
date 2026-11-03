@@ -25,7 +25,7 @@ export default function Header() {
       case '/security':
         return { title: 'Matriz de Seguridad', subtitle: 'Asignación de permisos a roles del sistema' };
       default:
-        return { title: 'SportManager Security', subtitle: 'Panel de Administración' };
+        return { title: 'OneSports Security', subtitle: 'Panel de Administración' };
     }
   };
 
@@ -128,6 +128,34 @@ export default function Header() {
             }}
           />
 
+          {/* OneSports Platform Badge */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '4px 10px',
+              backgroundColor: 'rgba(34, 197, 94, 0.1)',
+              border: '1px solid rgba(34, 197, 94, 0.3)',
+              borderRadius: '20px',
+              fontSize: '0.82rem',
+              fontWeight: 800,
+              letterSpacing: '0.02em',
+              color: '#ffffff',
+            }}
+          >
+            <Shield size={14} color="var(--accent)" />
+            <span>One<span style={{ color: 'var(--accent)' }}>Sports</span></span>
+          </div>
+
+          <div
+            style={{
+              height: '24px',
+              width: '1px',
+              backgroundColor: 'var(--border)',
+            }}
+          />
+
           {/* User Badge */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div
@@ -183,7 +211,7 @@ export default function Header() {
         onClose={() => setShowLogoutConfirm(false)}
         onConfirm={handleConfirmLogout}
         title="Cerrar Sesión"
-        message="¿Estás seguro de que deseas salir del panel de administración de SportManager?"
+        message="¿Estás seguro de que deseas salir del panel de administración de OneSports?"
         confirmText="Cerrar sesión"
         cancelText="Permanecer"
         variant="danger"

@@ -206,7 +206,7 @@ export default function DashboardPage() {
             Panel de Seguridad y Control
           </h2>
           <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-            Monitoreo en tiempo real de cuentas, políticas y accesos de SportManager.
+            Monitoreo en tiempo real de cuentas, políticas y accesos de OneSports.
           </p>
         </div>
 

@@ -19,6 +19,7 @@ async function request(endpoint, options = {}) {
   }
 
   const config = {
+    credentials: 'include',
     ...options,
     headers,
   };
@@ -59,6 +60,16 @@ async function request(endpoint, options = {}) {
           data = text;
         }
       }
+    }
+
+    // Handle 202 Accepted (Two-Factor Authentication required)
+    if (response.status === 202) {
+      const challengeId = response.headers.get('X-2FA-Challenge-Id');
+      return {
+        requires2FA: true,
+        challengeId,
+        ...(typeof data === 'object' && data !== null ? data : {}),
+      };
     }
 
     if (!response.ok) {
@@ -103,6 +114,10 @@ export const client = {
 /* Specific API Services */
 export const authApi = {
   login: (credentials) => client.post('/api/auth/login', credentials),
+  verify2FA: (data, challengeId) =>
+    client.post('/api/auth/2fa/verify', data, {
+      headers: challengeId ? { 'X-2FA-Challenge-Id': challengeId } : {},
+    }),
   register: (userData) => client.post('/api/auth/register', userData),
 };
 

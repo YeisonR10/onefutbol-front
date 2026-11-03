@@ -74,7 +74,7 @@ export default function Sidebar() {
               lineHeight: 1.1,
             }}
           >
-            SPORT<span style={{ color: 'var(--accent)' }}>MANAGER</span>
+            ONE<span style={{ color: 'var(--accent)' }}>SPORTS</span>
           </span>
           <span
             style={{

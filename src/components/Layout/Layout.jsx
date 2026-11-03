@@ -5,35 +5,12 @@ import Header from './Header';
 
 export default function Layout() {
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--bg-primary)' }}>
-      {/* Sidebar */}
+    <div className="app-layout">
       <Sidebar />
-
-      {/* Main Content Area */}
-      <div
-        style={{
-          marginLeft: 'var(--sidebar-width)',
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          minWidth: 0,
-        }}
-      >
+      <div className="app-main">
         <Header />
-        <main
-          style={{
-            flex: 1,
-            padding: '28px',
-            maxWidth: '1600px',
-            width: '100%',
-            margin: '0 auto',
-            boxSizing: 'border-box',
-          }}
-        >
-          <Outlet />
-        </main>
+        <main className="app-content" id="main-content" tabIndex="-1"><Outlet /></main>
       </div>
     </div>
   );
 }
-

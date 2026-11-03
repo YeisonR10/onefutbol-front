@@ -207,10 +207,13 @@ export default function RolesPage() {
   };
 
   const handleDeleteRole = (role) => {
+    const assignedUsers = selectedRole?.id === role.id ? roleUsers.length : null;
     setConfirmDialog({
       isOpen: true,
       title: 'Eliminar Rol',
-      message: `¿Está seguro de eliminar el rol "${role.name}"? Los usuarios asignados a este rol perderán sus permisos asociados.`,
+      message: assignedUsers > 0
+        ? `Este rol está asignado a ${assignedUsers} usuario(s) y no puede eliminarse. Retire primero esas asignaciones desde la gestión de usuarios del rol.`
+        : `¿Está seguro de eliminar el rol "${role.name}"? Se quitarán sus asociaciones con permisos, pero los usuarios y permisos de la plataforma se conservarán. Si el rol tiene usuarios asignados, el servidor rechazará la operación.`,
       confirmText: 'Eliminar rol',
       onConfirm: async () => {
         setConfirmLoading(true);

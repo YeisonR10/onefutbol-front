@@ -1,7 +1,9 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authApi } from '../api/client';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { authApi, usersApi } from '../api/client';
 
 const AuthContext = createContext(null);
+
+const isNumericIdentifier = (value) => /^\d+$/.test(String(value ?? ''));
 
 function parseJwt(token) {
   try {
@@ -19,6 +21,42 @@ function parseJwt(token) {
   } catch {
     return null;
   }
+}
+
+function resolveUser(decoded, email, response = {}) {
+  const responseUser = response.user || response.data?.user || response.data || response;
+  const subject = decoded?.sub;
+  const resolvedEmail =
+    [
+      responseUser.email,
+      responseUser.emailAddress,
+      decoded?.email,
+      decoded?.preferred_username,
+      subject,
+      email,
+    ].find((value) => typeof value === 'string' && value.includes('@')) || '';
+  const name =
+    [responseUser.name, responseUser.fullName, decoded?.name, decoded?.fullName, decoded?.given_name]
+      .find((value) => typeof value === 'string' && value.trim() && !isNumericIdentifier(value)) ||
+    resolvedEmail.split('@')[0] ||
+    'Usuario';
+  const id =
+    responseUser.id ??
+    responseUser.userId ??
+    response.userId ??
+    decoded?.userId ??
+    decoded?.user_id ??
+    decoded?.id ??
+    (isNumericIdentifier(subject) ? subject : undefined);
+
+  return {
+    ...(id !== undefined ? { id } : {}),
+    email: resolvedEmail,
+    name,
+    role: responseUser.role || decoded?.role || 'ADMIN',
+    tokenType: response.tokenType || response.type || 'Bearer',
+    expiresAt: response.expiresAt,
+  };
 }
 
 export function AuthProvider({ children }) {
@@ -39,20 +77,16 @@ export function AuthProvider({ children }) {
 
     if (storedToken) {
       setToken(storedToken);
+      const decoded = parseJwt(storedToken);
       if (storedUser) {
         try {
-          setUser(JSON.parse(storedUser));
+          const savedUser = JSON.parse(storedUser);
+          setUser(resolveUser(decoded, savedUser.email, savedUser));
         } catch {
           setUser({ email: 'usuario@onesports.com', name: 'Administrador' });
         }
       } else {
-        const decoded = parseJwt(storedToken);
-        const email = decoded?.sub || 'admin@onesports.com';
-        const fallbackUser = {
-          email,
-          name: email.split('@')[0].toUpperCase(),
-          role: decoded?.role || 'ADMIN',
-        };
+        const fallbackUser = resolveUser(decoded, '');
         setUser(fallbackUser);
         localStorage.setItem('user', JSON.stringify(fallbackUser));
       }
@@ -65,14 +99,7 @@ export function AuthProvider({ children }) {
 
   const completeLogin = (jwtToken, email, response = {}) => {
     const decoded = parseJwt(jwtToken);
-    const resolvedEmail = decoded?.sub || email;
-    const resolvedUser = {
-      email: resolvedEmail,
-      name: decoded?.name || resolvedEmail.split('@')[0].toUpperCase(),
-      role: decoded?.role || 'ADMIN',
-      tokenType: response.tokenType || response.type || 'Bearer',
-      expiresAt: response.expiresAt,
-    };
+    const resolvedUser = resolveUser(decoded, email, response);
 
     localStorage.setItem('token', jwtToken);
     localStorage.setItem('user', JSON.stringify(resolvedUser));
@@ -82,6 +109,20 @@ export function AuthProvider({ children }) {
 
     return resolvedUser;
   };
+
+  const refreshUserProfile = useCallback(async () => {
+    if (!user?.id) return;
+
+    const response = await usersApi.getById(user.id);
+    const profile = response?.user || response?.data || response;
+    if (!profile?.name) {
+      throw new Error('El servidor no devolvió el nombre del usuario');
+    }
+
+    const updatedUser = { ...user, ...profile, id: profile.id ?? user.id };
+    setUser(updatedUser);
+    localStorage.setItem('user', JSON.stringify(updatedUser));
+  }, [user]);
 
   const login = async (email, password) => {
     const response = await authApi.login({ email, password });
@@ -128,6 +169,7 @@ export function AuthProvider({ children }) {
     token,
     loading,
     isAuthenticated: !!token,
+    refreshUserProfile,
     login,
     verify2FA,
     register,
@@ -144,4 +186,3 @@ export function useAuth() {
   }
   return context;
 }
-

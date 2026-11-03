@@ -1,15 +1,28 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Bell, LogOut, Shield } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import ConfirmDialog from '../common/ConfirmDialog';
+import { useToast } from '../common/Toast';
 
 export default function Header() {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUserProfile } = useAuth();
+  const { showToast } = useToast();
   const location = useLocation();
   const navigate = useNavigate();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showNotificationMenu, setShowNotificationMenu] = useState(false);
+  const loadedProfileId = useRef(null);
+
+  useEffect(() => {
+    if (!user?.id || loadedProfileId.current === user.id) return;
+    loadedProfileId.current = user.id;
+
+    refreshUserProfile().catch((err) => {
+      loadedProfileId.current = null;
+      showToast(err.message || 'No se pudo cargar la información del usuario', 'error');
+    });
+  }, [user?.id, refreshUserProfile, showToast]);
 
   // Derive title from current path
   const getPageTitle = () => {
@@ -219,4 +232,3 @@ export default function Header() {
     </>
   );
 }
-

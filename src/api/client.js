@@ -141,6 +141,7 @@ export const usersApi = {
   activate: (id) => client.patch(`/api/users/${id}/activate`),
   activate2FA: (id) => client.patch(`/api/users/${id}/2fa/activate`),
   deactivate2FA: (id) => client.patch(`/api/users/${id}/2fa/desactivate`),
+  updateOwnTwoFA: (enabled) => client.put('/api/users/me/2fa', { enabled }),
 };
 
 export const profileApi = {

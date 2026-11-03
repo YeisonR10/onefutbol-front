@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { CalendarDays, Camera, Mail, PencilLine, Phone, UserRound } from 'lucide-react';
+import { CalendarDays, Camera, Mail, PencilLine, Phone, ShieldCheck, UserRound } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { profileApi, usersApi } from '../../api/client';
 import Modal from '../common/Modal';
+import ConfirmDialog from '../common/ConfirmDialog';
 import { useToast } from '../common/Toast';
 
 const emptyProfile = { phone: '', birthDate: '', photo: '' };
@@ -13,18 +14,30 @@ export default function ProfileAccess({ placement = 'header' }) {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [twoFALoading, setTwoFALoading] = useState(false);
+  const [twoFAEnabled, setTwoFAEnabled] = useState(Boolean(user?.twoFA));
+  const [twoFAConfirmation, setTwoFAConfirmation] = useState(null);
   const [profile, setProfile] = useState(null);
   const [form, setForm] = useState({ ...emptyProfile });
   const [userForm, setUserForm] = useState({ name: user?.name || '', email: user?.email || '' });
 
   const openProfile = async () => {
     setUserForm({ name: user?.name || '', email: user?.email || '' });
+    setTwoFAEnabled(Boolean(user?.twoFA));
     setIsOpen(true);
     if (!user?.id) return;
     setLoading(true);
     try {
-      const result = await profileApi.getByUserId(user.id);
+      const [profileResult, userResult] = await Promise.allSettled([
+        profileApi.getByUserId(user.id),
+        usersApi.getById(user.id),
+      ]);
+      const result = profileResult.status === 'fulfilled' ? profileResult.value : null;
       const current = result?.profile || result?.data || result;
+      const account = userResult.status === 'fulfilled'
+        ? userResult.value?.user || userResult.value?.data || userResult.value
+        : null;
+      if (typeof account?.twoFA === 'boolean') setTwoFAEnabled(account.twoFA);
       setProfile(current && (current.id || current.phone || current.birthDate || current.photo) ? current : null);
       setForm({
         phone: current?.phone || '',
@@ -36,6 +49,23 @@ export default function ProfileAccess({ placement = 'header' }) {
       setForm({ ...emptyProfile });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleToggleTwoFA = async () => {
+    if (!user?.id || twoFAConfirmation === null) return;
+    const enable = twoFAConfirmation;
+    setTwoFALoading(true);
+    try {
+      await usersApi.updateOwnTwoFA(enable);
+      setTwoFAEnabled(enable);
+      setTwoFAConfirmation(null);
+      showToast(`Autenticación en dos pasos ${enable ? 'activada' : 'desactivada'}`, 'success');
+      refreshUserProfile().catch(() => {});
+    } catch (error) {
+      showToast(error.message || 'No se pudo actualizar la autenticación en dos pasos', 'error');
+    } finally {
+      setTwoFALoading(false);
     }
   };
 
@@ -129,9 +159,44 @@ export default function ProfileAccess({ placement = 'header' }) {
                 <div className="profile-photo-field"><label htmlFor={`profile-photo-${placement}`}>Foto de perfil · URL</label><div className="profile-input-icon"><Camera size={16} /><input id={`profile-photo-${placement}`} type="url" value={form.photo} onChange={(event) => setForm({ ...form, photo: event.target.value })} placeholder="https://..." /></div></div>
               </div>
             </div>
+            <section className="profile-security-card" aria-labelledby={`profile-security-title-${placement}`}>
+              <div className="profile-security-copy">
+                <span className="profile-security-icon"><ShieldCheck size={19} /></span>
+                <span>
+                  <strong id={`profile-security-title-${placement}`}>Autenticación en dos pasos</strong>
+                  <small>{twoFAEnabled ? 'Tu cuenta tiene una capa adicional de protección.' : 'Añade una capa adicional de protección al iniciar sesión.'}</small>
+                </span>
+              </div>
+              <div className="profile-security-action">
+                <span className={`profile-security-status${twoFAEnabled ? ' is-enabled' : ''}`}>
+                  <i aria-hidden="true" />{twoFAEnabled ? 'Activada' : 'Desactivada'}
+                </span>
+                <button
+                  type="button"
+                  className={twoFAEnabled ? 'btn btn-secondary btn-sm' : 'btn btn-primary btn-sm'}
+                  onClick={() => setTwoFAConfirmation(!twoFAEnabled)}
+                  disabled={twoFALoading || saving}
+                >
+                  {twoFAEnabled ? 'Desactivar' : 'Activar'}
+                </button>
+              </div>
+            </section>
           </form>
         )}
       </Modal>
+      <ConfirmDialog
+        isOpen={twoFAConfirmation !== null}
+        onClose={() => !twoFALoading && setTwoFAConfirmation(null)}
+        onConfirm={handleToggleTwoFA}
+        title={twoFAConfirmation ? 'Activar autenticación en dos pasos' : 'Desactivar autenticación en dos pasos'}
+        message={twoFAConfirmation
+          ? 'Al activarla, se solicitará un código de verificación adicional al iniciar sesión en esta cuenta.'
+          : 'Al desactivarla, tu cuenta dejará de solicitar el código de verificación adicional al iniciar sesión.'}
+        confirmText={twoFAConfirmation ? 'Activar protección' : 'Desactivar protección'}
+        cancelText="Volver al perfil"
+        variant={twoFAConfirmation ? 'primary' : 'warning'}
+        loading={twoFALoading}
+      />
     </>
   );
 }

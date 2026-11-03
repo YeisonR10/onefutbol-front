@@ -3,20 +3,82 @@ import { useLocation } from 'react-router-dom';
 import {
   ShieldAlert,
   ShieldCheck,
-  KeyRound,
   Search,
-  Plus,
-  Trash2,
-  Check,
-  Filter,
-  Lock,
-  Layers,
-  Sparkles,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import { rolesApi, permissionsApi, rolePermissionsApi } from '../../api/client';
-import Badge from '../../components/common/Badge';
-import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { useToast } from '../../components/common/Toast';
+
+// Columnas de la matriz: label visible → métodos HTTP que representa
+const MATRIX_COLUMNS = [
+  { key: 'GET',    label: 'Ver'         },
+  { key: 'POST',   label: 'Crear'       },
+  { key: 'PUT',    label: 'Actualizar'  },
+  { key: 'DELETE', label: 'Eliminar'    },
+  { key: 'PATCH',  label: 'Parcial'     },
+];
+
+// Ícono resource genérico por modelo
+function ResourceIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      style={{ color: 'var(--text-muted)', flexShrink: 0 }}>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M6 20v-2a6 6 0 0 1 12 0v2" />
+    </svg>
+  );
+}
+
+// Checkbox visual estilo imagen
+function MatrixCheckbox({ checked, loading, onChange, disabled }) {
+  return (
+    <button
+      type="button"
+      onClick={disabled || loading ? undefined : onChange}
+      disabled={disabled || loading}
+      style={{
+        width: '26px',
+        height: '26px',
+        borderRadius: '5px',
+        border: checked
+          ? '2px solid var(--accent)'
+          : '2px solid var(--border-light)',
+        background: checked
+          ? 'var(--accent)'
+          : 'rgba(255,255,255,0.04)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        transition: 'var(--transition)',
+        opacity: disabled ? 0.4 : 1,
+        padding: 0,
+      }}
+      title={checked ? 'Quitar permiso' : 'Asignar permiso'}
+    >
+      {loading ? (
+        <span
+          style={{
+            width: '12px',
+            height: '12px',
+            border: '2px solid rgba(0,0,0,0.3)',
+            borderTop: '2px solid #000',
+            borderRadius: '50%',
+            display: 'inline-block',
+            animation: 'spin 0.7s linear infinite',
+          }}
+        />
+      ) : checked ? (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+          stroke="#000" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      ) : null}
+    </button>
+  );
+}
 
 export default function SecurityPage() {
   const location = useLocation();
@@ -25,20 +87,15 @@ export default function SecurityPage() {
   const [rolePermissions, setRolePermissions] = useState([]);
   const [selectedRoleId, setSelectedRoleId] = useState(location.state?.roleId || '');
   const [loading, setLoading] = useState(true);
-  const [actionLoadingId, setActionLoadingId] = useState(null);
 
-  // Filters for left panel
+  // { permId: true } mientras está cargando esa celda
+  const [cellLoading, setCellLoading] = useState({});
+
+  // Grupos colapsados
+  const [collapsedGroups, setCollapsedGroups] = useState({});
+
+  // Búsqueda
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterModel, setFilterModel] = useState('ALL');
-  const [filterMethod, setFilterMethod] = useState('ALL');
-
-  // Confirm dialog for removing permission
-  const [confirmDialog, setConfirmDialog] = useState({
-    isOpen: false,
-    title: '',
-    message: '',
-    onConfirm: () => {},
-  });
 
   const { showToast } = useToast();
 
@@ -55,7 +112,6 @@ export default function SecurityPage() {
       setPermissions(permsRes || []);
       setRolePermissions(rolePermsRes || []);
 
-      // If no role selected and roles exist, select the first one
       if (!selectedRoleId && rolesRes && rolesRes.length > 0) {
         setSelectedRoleId(rolesRes[0].id);
       }
@@ -70,116 +126,122 @@ export default function SecurityPage() {
     loadData();
   }, []);
 
-  // Currently selected role object
-  const activeRole = useMemo(() => {
-    return roles.find((r) => String(r.id) === String(selectedRoleId)) || null;
-  }, [roles, selectedRoleId]);
+  // Rol activo
+  const activeRole = useMemo(
+    () => roles.find((r) => String(r.id) === String(selectedRoleId)) || null,
+    [roles, selectedRoleId]
+  );
 
-  // Set of assigned permission IDs for active role
+  // Set de IDs de permisos asignados al rol activo
   const assignedPermissionIds = useMemo(() => {
     if (!activeRole) return new Set();
     const ids = new Set();
     rolePermissions.forEach((rp) => {
       const rId = rp.roleId || rp.role?.id;
       const pId = rp.permission?.id || rp.permissionId;
-      if (String(rId) === String(activeRole.id)) {
-        ids.add(pId);
-      }
+      if (String(rId) === String(activeRole.id)) ids.add(pId);
     });
     return ids;
   }, [rolePermissions, activeRole]);
 
-  // List of full permission objects assigned to the active role
-  const assignedPermissionsList = useMemo(() => {
-    return permissions.filter((p) => assignedPermissionIds.has(p.id));
-  }, [permissions, assignedPermissionIds]);
-
-  // Unique models list
-  const uniqueModels = useMemo(() => {
-    const set = new Set();
-    permissions.forEach((p) => {
-      if (p.model) set.add(p.model);
-    });
-    return Array.from(set).sort();
-  }, [permissions]);
-
-  // Filtered permissions list for left panel
-  const filteredPermissions = useMemo(() => {
-    return permissions.filter((p) => {
-      const matchesSearch =
+  // Agrupar permisos por modelo
+  const groupedPermissions = useMemo(() => {
+    const filtered = permissions.filter((p) => {
+      if (!searchQuery) return true;
+      return (
         p.url?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.model?.toLowerCase().includes(searchQuery.toLowerCase());
-
-      const matchesModel = filterModel === 'ALL' || p.model === filterModel;
-      const matchesMethod = filterMethod === 'ALL' || p.method === filterMethod;
-
-      return matchesSearch && matchesModel && matchesMethod;
+        p.model?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
     });
-  }, [permissions, searchQuery, filterModel, filterMethod]);
 
-  // Assign permission to active role
-  const handleAssignPermission = async (permission) => {
+    const groups = {};
+    filtered.forEach((p) => {
+      const model = p.model || 'Sin módulo';
+      if (!groups[model]) groups[model] = [];
+      groups[model].push(p);
+    });
+    return groups;
+  }, [permissions, searchQuery]);
+
+  const sortedGroupKeys = useMemo(
+    () => Object.keys(groupedPermissions).sort(),
+    [groupedPermissions]
+  );
+
+  // Contar permisos asignados
+  const assignedCount = assignedPermissionIds.size;
+  const totalCount = permissions.length;
+
+  // Toggle grupo colapsado
+  const toggleGroup = (model) => {
+    setCollapsedGroups((prev) => ({ ...prev, [model]: !prev[model] }));
+  };
+
+  // Toggle asignación de permiso
+  const handleToggle = async (perm) => {
     if (!activeRole) return;
-    setActionLoadingId(permission.id);
+    const isAssigned = assignedPermissionIds.has(perm.id);
+
+    setCellLoading((prev) => ({ ...prev, [perm.id]: true }));
     try {
-      await rolePermissionsApi.assign({
-        roleId: activeRole.id,
-        permissionId: permission.id,
-      });
-
-      showToast(`Permiso [${permission.method}] ${permission.url} asignado`, 'success');
-
-      // Refresh role permissions
+      if (isAssigned) {
+        await rolePermissionsApi.remove(activeRole.id, perm.id);
+        showToast(`Permiso [${perm.method}] ${perm.url} removido`, 'info');
+      } else {
+        await rolePermissionsApi.assign({ roleId: activeRole.id, permissionId: perm.id });
+        showToast(`Permiso [${perm.method}] ${perm.url} asignado`, 'success');
+      }
       const updated = await rolePermissionsApi.getAll();
       setRolePermissions(updated || []);
     } catch (err) {
-      showToast(err.message || 'Error al asignar permiso', 'error');
+      showToast(err.message || 'Error al cambiar permiso', 'error');
     } finally {
-      setActionLoadingId(null);
+      setCellLoading((prev) => ({ ...prev, [perm.id]: false }));
     }
   };
 
-  // Remove permission from active role
-  const handleRemovePermission = (permission) => {
+  // Toggle toda una columna (método) de un grupo
+  const handleToggleGroupColumn = async (model, method) => {
     if (!activeRole) return;
+    const groupPerms = groupedPermissions[model] || [];
+    const colPerms = groupPerms.filter((p) => p.method === method);
+    if (colPerms.length === 0) return;
 
-    setConfirmDialog({
-      isOpen: true,
-      title: 'Quitar Permiso de Rol',
-      message: `¿Desea desvincular el permiso [${permission.method}] ${permission.url} del rol "${activeRole.name}"?`,
-      onConfirm: async () => {
-        setActionLoadingId(permission.id);
-        try {
-          await rolePermissionsApi.remove(activeRole.id, permission.id);
-          showToast(`Permiso [${permission.method}] removido`, 'success');
-          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+    const allAssigned = colPerms.every((p) => assignedPermissionIds.has(p.id));
 
-          // Refresh role permissions
-          const updated = await rolePermissionsApi.getAll();
-          setRolePermissions(updated || []);
-        } catch (err) {
-          showToast(err.message || 'Error al remover permiso', 'error');
-        } finally {
-          setActionLoadingId(null);
-        }
-      },
-    });
+    // Marcar loading para todos
+    const loadingPatch = {};
+    colPerms.forEach((p) => { loadingPatch[p.id] = true; });
+    setCellLoading((prev) => ({ ...prev, ...loadingPatch }));
+
+    try {
+      await Promise.all(
+        colPerms.map((p) =>
+          allAssigned
+            ? rolePermissionsApi.remove(activeRole.id, p.id)
+            : assignedPermissionIds.has(p.id)
+              ? Promise.resolve()
+              : rolePermissionsApi.assign({ roleId: activeRole.id, permissionId: p.id })
+        )
+      );
+      const updated = await rolePermissionsApi.getAll();
+      setRolePermissions(updated || []);
+      showToast(allAssigned ? 'Permisos removidos' : 'Permisos asignados', 'success');
+    } catch (err) {
+      showToast(err.message || 'Error al cambiar permisos', 'error');
+    } finally {
+      setCellLoading((prev) => {
+        const next = { ...prev };
+        colPerms.forEach((p) => { next[p.id] = false; });
+        return next;
+      });
+    }
   };
-
-  // Method distribution stats for active role
-  const methodStats = useMemo(() => {
-    const stats = { GET: 0, POST: 0, PUT: 0, PATCH: 0, DELETE: 0 };
-    assignedPermissionsList.forEach((p) => {
-      if (stats[p.method] !== undefined) {
-        stats[p.method] += 1;
-      }
-    });
-    return stats;
-  }, [assignedPermissionsList]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Top Bar: Role Selector */}
+
+      {/* Top Bar: Encabezado + Selector de Rol */}
       <div
         className="card"
         style={{
@@ -196,14 +258,10 @@ export default function SecurityPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
           <div
             style={{
-              width: '42px',
-              height: '42px',
-              borderRadius: '10px',
+              width: '42px', height: '42px', borderRadius: '10px',
               backgroundColor: 'var(--accent-dim)',
               border: '1px solid rgba(34, 197, 94, 0.35)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: 'var(--accent)',
             }}
           >
@@ -211,7 +269,7 @@ export default function SecurityPage() {
           </div>
           <div>
             <span style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700 }}>
-              Matriz de Control de Acceso (HU-SE-06)
+              Matriz de Control de Acceso
             </span>
             <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#ffffff' }}>
               Configurar Políticas de Seguridad por Rol
@@ -219,7 +277,6 @@ export default function SecurityPage() {
           </div>
         </div>
 
-        {/* Role Selector dropdown */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <label htmlFor="role-select" style={{ margin: 0, color: 'var(--text-secondary)', fontWeight: 600 }}>
             Rol Objetivo:
@@ -236,9 +293,7 @@ export default function SecurityPage() {
             }}
           >
             {roles.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
+              <option key={r.id} value={r.id}>{r.name}</option>
             ))}
           </select>
         </div>
@@ -246,9 +301,9 @@ export default function SecurityPage() {
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: '60px 0' }}>
-          <div className="spinner spinner-lg"></div>
+          <div className="spinner spinner-lg" />
           <p style={{ marginTop: '14px', color: 'var(--text-secondary)' }}>
-            Cargando catálogo de permisos y roles...
+            Cargando matriz de permisos...
           </p>
         </div>
       ) : !activeRole ? (
@@ -256,381 +311,231 @@ export default function SecurityPage() {
           No se ha seleccionado ningún rol. Por favor cree un rol primero.
         </div>
       ) : (
-        /* Dual Panel Layout */
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1.2fr 0.8fr',
-            gap: '24px',
-            alignItems: 'start',
-          }}
-        >
-          {/* Left Panel: Available Permissions with Filters and Assign Buttons */}
-          <div className="card" style={{ padding: '22px' }}>
-            <div className="card-header" style={{ alignItems: 'flex-start' }}>
-              <div>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#ffffff' }}>
-                  Catálogo de Permisos
-                </h3>
-                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  Selecciona los endpoints autorizados para este rol
-                </p>
-              </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
-              <span
-                style={{
-                  fontSize: '0.78rem',
-                  padding: '4px 10px',
-                  borderRadius: '20px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                  color: 'var(--text-secondary)',
-                }}
-              >
-                {filteredPermissions.length} disponibles
+          {/* Barra de búsqueda + stats */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+            <div style={{ position: 'relative', flex: 1, minWidth: '240px', maxWidth: '400px' }}>
+              <input
+                type="text"
+                placeholder="Buscar por módulo o URL..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{ paddingLeft: '38px', fontSize: '0.85rem' }}
+              />
+              <Search
+                size={16}
+                color="var(--text-muted)"
+                style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+              <ShieldCheck size={16} color="var(--accent)" />
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                <strong style={{ color: 'var(--accent)' }}>{assignedCount}</strong>
+                {' / '}
+                <strong>{totalCount}</strong>
+                {' permisos asignados al rol '}
+                <strong style={{ color: '#ffffff' }}>{activeRole.name}</strong>
               </span>
-            </div>
-
-            {/* Search and Filters */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '18px' }}>
-              <div style={{ position: 'relative' }}>
-                <input
-                  type="text"
-                  placeholder="Filtrar por URL o modelo..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{ paddingLeft: '38px', fontSize: '0.85rem' }}
-                />
-                <Search
-                  size={16}
-                  color="var(--text-muted)"
-                  style={{
-                    position: 'absolute',
-                    left: '12px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                  }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <select
-                  value={filterMethod}
-                  onChange={(e) => setFilterMethod(e.target.value)}
-                  style={{ flex: 1, fontSize: '0.82rem', padding: '8px 10px' }}
-                >
-                  <option value="ALL">Todos los métodos</option>
-                  <option value="GET">GET</option>
-                  <option value="POST">POST</option>
-                  <option value="PUT">PUT</option>
-                  <option value="PATCH">PATCH</option>
-                  <option value="DELETE">DELETE</option>
-                </select>
-
-                <select
-                  value={filterModel}
-                  onChange={(e) => setFilterModel(e.target.value)}
-                  style={{ flex: 1, fontSize: '0.82rem', padding: '8px 10px' }}
-                >
-                  <option value="ALL">Todos los módulos</option>
-                  {uniqueModels.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* List of Permissions */}
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px',
-                maxHeight: '620px',
-                overflowY: 'auto',
-                paddingRight: '4px',
-              }}
-            >
-              {filteredPermissions.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                  No se encontraron permisos con los filtros aplicados.
-                </div>
-              ) : (
-                filteredPermissions.map((perm) => {
-                  const isAssigned = assignedPermissionIds.has(perm.id);
-                  const isPending = actionLoadingId === perm.id;
-
-                  return (
-                    <div
-                      key={perm.id}
-                      style={{
-                        padding: '12px 14px',
-                        backgroundColor: isAssigned ? 'rgba(34, 197, 94, 0.05)' : 'var(--bg-secondary)',
-                        border: isAssigned ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid var(--border)',
-                        borderRadius: '8px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '12px',
-                        transition: 'var(--transition)',
-                      }}
-                    >
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                          <Badge method={perm.method} />
-                          <span
-                            style={{
-                              fontSize: '0.75rem',
-                              color: 'var(--text-muted)',
-                              backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                              padding: '1px 6px',
-                              borderRadius: '4px',
-                            }}
-                          >
-                            {perm.model}
-                          </span>
-                        </div>
-                        <div
-                          style={{
-                            fontFamily: "'JetBrains Mono', monospace",
-                            fontSize: '0.82rem',
-                            color: '#ffffff',
-                            wordBreak: 'break-all',
-                          }}
-                        >
-                          {perm.url}
-                        </div>
-                      </div>
-
-                      {/* Action Button */}
-                      <div>
-                        {isAssigned ? (
-                          <button
-                            type="button"
-                            className="btn btn-secondary btn-sm"
-                            onClick={() => handleRemovePermission(perm)}
-                            disabled={isPending}
-                            style={{
-                              color: 'var(--danger)',
-                              borderColor: 'rgba(239, 68, 68, 0.3)',
-                              backgroundColor: 'rgba(239, 68, 68, 0.08)',
-                            }}
-                            title="Quitar permiso"
-                          >
-                            {isPending ? (
-                              <span className="spinner"></span>
-                            ) : (
-                              <>
-                                <Check size={14} color="var(--accent)" />
-                                <span>Asignado</span>
-                              </>
-                            )}
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className="btn btn-outline btn-sm"
-                            onClick={() => handleAssignPermission(perm)}
-                            disabled={isPending}
-                            title="Asignar permiso a este rol"
-                          >
-                            {isPending ? (
-                              <span className="spinner"></span>
-                            ) : (
-                              <>
-                                <Plus size={14} />
-                                <span>Asignar</span>
-                              </>
-                            )}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
             </div>
           </div>
 
-          {/* Right Panel: Role Summary and Assigned Permissions */}
-          <div className="card" style={{ padding: '22px' }}>
-            <div className="card-header">
-              <div>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#ffffff' }}>
-                  Resumen de Rol
-                </h3>
-                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  Permisos efectivos asignados
-                </p>
-              </div>
-
-              <div
-                style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '8px',
-                  backgroundColor: 'rgba(34, 197, 94, 0.15)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'var(--accent)',
-                }}
-              >
-                <ShieldCheck size={18} />
-              </div>
-            </div>
-
-            {/* Role Info Box */}
-            <div
-              style={{
-                backgroundColor: 'var(--bg-secondary)',
-                border: '1px solid var(--border)',
-                borderRadius: '8px',
-                padding: '16px',
-                marginBottom: '18px',
-              }}
-            >
-              <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#ffffff' }}>
-                {activeRole.name}
-              </div>
-              <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                {activeRole.description || 'Sin descripción'}
-              </p>
-
-              {/* Method Counters */}
-              <div
-                style={{
-                  display: 'flex',
-                  gap: '8px',
-                  flexWrap: 'wrap',
-                  marginTop: '14px',
-                  paddingTop: '12px',
-                  borderTop: '1px solid var(--border)',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.74rem' }}>
-                  <Badge method="GET" />: <strong>{methodStats.GET}</strong>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.74rem' }}>
-                  <Badge method="POST" />: <strong>{methodStats.POST}</strong>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.74rem' }}>
-                  <Badge method="PUT" />: <strong>{methodStats.PUT}</strong>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.74rem' }}>
-                  <Badge method="DELETE" />: <strong>{methodStats.DELETE}</strong>
-                </div>
-              </div>
-            </div>
-
-            {/* Assigned Permissions List with quick remove button */}
-            <div>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: '10px',
-                }}
-              >
-                <span style={{ fontSize: '0.86rem', fontWeight: 700, color: '#ffffff' }}>
-                  Permisos Vinculados ({assignedPermissionsList.length})
-                </span>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  Total {permissions.length} en el catálogo
-                </span>
-              </div>
-
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px',
-                  maxHeight: '460px',
-                  overflowY: 'auto',
-                }}
-              >
-                {assignedPermissionsList.length === 0 ? (
-                  <div
-                    style={{
-                      padding: '30px 16px',
-                      textAlign: 'center',
-                      backgroundColor: 'var(--bg-secondary)',
-                      borderRadius: '8px',
-                      border: '1px dashed var(--border)',
-                      fontSize: '0.84rem',
-                      color: 'var(--text-muted)',
-                    }}
-                  >
-                    No hay permisos asignados todavía a este rol.
-                    <br />
-                    Haz clic en "Asignar" en la lista de la izquierda.
-                  </div>
-                ) : (
-                  assignedPermissionsList.map((perm) => (
-                    <div
-                      key={perm.id}
-                      style={{
-                        padding: '10px 14px',
-                        backgroundColor: 'var(--bg-secondary)',
-                        border: '1px solid var(--border)',
-                        borderRadius: '8px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '10px',
-                      }}
+          {/* Tabla Matriz */}
+          <div className="table-container" style={{ overflowX: 'auto' }}>
+            <table style={{ minWidth: '700px' }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left', paddingLeft: '20px', minWidth: '200px' }}>
+                    Recurso
+                  </th>
+                  {MATRIX_COLUMNS.map((col) => (
+                    <th key={col.key} style={{ textAlign: 'center', width: '110px' }}>
+                      {col.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {sortedGroupKeys.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={MATRIX_COLUMNS.length + 1}
+                      style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}
                     >
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
-                          <Badge method={perm.method} />
-                          <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                            {perm.model}
-                          </span>
-                        </div>
-                        <div
-                          style={{
-                            fontFamily: "'JetBrains Mono', monospace",
-                            fontSize: '0.8rem',
-                            color: '#ffffff',
-                            wordBreak: 'break-all',
-                          }}
-                        >
-                          {perm.url}
-                        </div>
-                      </div>
+                      No se encontraron permisos con ese filtro.
+                    </td>
+                  </tr>
+                ) : (
+                  sortedGroupKeys.map((model) => {
+                    const groupPerms = groupedPermissions[model];
+                    const isCollapsed = collapsedGroups[model];
 
-                      <button
-                        type="button"
-                        className="btn-icon"
-                        onClick={() => handleRemovePermission(perm)}
-                        style={{ color: 'var(--danger)', padding: '6px' }}
-                        title="Quitar permiso"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  ))
+                    // Cuántos del grupo están asignados
+                    const groupAssigned = groupPerms.filter((p) => assignedPermissionIds.has(p.id)).length;
+
+                    return (
+                      <React.Fragment key={model}>
+                        {/* Fila de encabezado de grupo */}
+                        <tr
+                          style={{
+                            backgroundColor: '#1a2744',
+                            cursor: 'pointer',
+                          }}
+                          onClick={() => toggleGroup(model)}
+                        >
+                          <td
+                            colSpan={1}
+                            style={{
+                              padding: '10px 20px',
+                              fontWeight: 700,
+                              color: '#ffffff',
+                              fontSize: '0.88rem',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              {isCollapsed
+                                ? <ChevronRight size={15} color="var(--text-muted)" />
+                                : <ChevronDown size={15} color="var(--text-muted)" />
+                              }
+                              <span
+                                style={{
+                                  width: '8px', height: '8px', borderRadius: '50%',
+                                  backgroundColor: 'var(--accent)',
+                                  display: 'inline-block',
+                                  flexShrink: 0,
+                                }}
+                              />
+                              {model}
+                              <span
+                                style={{
+                                  fontSize: '0.72rem',
+                                  color: 'var(--text-muted)',
+                                  fontWeight: 400,
+                                  marginLeft: '4px',
+                                }}
+                              >
+                                ({groupAssigned}/{groupPerms.length})
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* Checkboxes de columna para el grupo entero */}
+                          {MATRIX_COLUMNS.map((col) => {
+                            const colPerms = groupPerms.filter((p) => p.method === col.key);
+                            const allChecked = colPerms.length > 0 && colPerms.every((p) => assignedPermissionIds.has(p.id));
+                            const someChecked = colPerms.some((p) => assignedPermissionIds.has(p.id));
+                            const isColLoading = colPerms.some((p) => cellLoading[p.id]);
+
+                            return (
+                              <td key={col.key} style={{ textAlign: 'center', padding: '10px 6px' }}>
+                                {colPerms.length > 0 ? (
+                                  <div style={{ display: 'flex', justifyContent: 'center' }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <MatrixCheckbox
+                                      checked={allChecked}
+                                      loading={isColLoading}
+                                      onChange={() => handleToggleGroupColumn(model, col.key)}
+                                    />
+                                  </div>
+                                ) : (
+                                  <span style={{ color: 'var(--border-light)', fontSize: '0.7rem' }}>—</span>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+
+                        {/* Filas de permisos individuales del grupo */}
+                        {!isCollapsed && groupPerms.map((perm) => {
+                          // La fila de detalle muestra el URL del permiso
+                          const isAssigned = assignedPermissionIds.has(perm.id);
+
+                          return (
+                            <tr
+                              key={perm.id}
+                              style={{
+                                backgroundColor: isAssigned
+                                  ? 'rgba(34, 197, 94, 0.04)'
+                                  : 'transparent',
+                              }}
+                            >
+                              <td
+                                style={{
+                                  paddingLeft: '42px',
+                                  paddingRight: '18px',
+                                  paddingTop: '10px',
+                                  paddingBottom: '10px',
+                                }}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <ResourceIcon />
+                                  <span
+                                    style={{
+                                      fontFamily: "'JetBrains Mono', monospace",
+                                      fontSize: '0.78rem',
+                                      color: isAssigned ? '#ffffff' : 'var(--text-secondary)',
+                                      wordBreak: 'break-all',
+                                    }}
+                                  >
+                                    {perm.url}
+                                  </span>
+                                  {/* Badge método */}
+                                  <span
+                                    style={{
+                                      fontSize: '0.65rem',
+                                      fontWeight: 700,
+                                      padding: '1px 6px',
+                                      borderRadius: '4px',
+                                      flexShrink: 0,
+                                      backgroundColor:
+                                        perm.method === 'GET' ? 'rgba(59,130,246,0.18)' :
+                                        perm.method === 'POST' ? 'rgba(34,197,94,0.18)' :
+                                        perm.method === 'PUT' ? 'rgba(245,158,11,0.18)' :
+                                        perm.method === 'PATCH' ? 'rgba(168,85,247,0.18)' :
+                                        'rgba(239,68,68,0.18)',
+                                      color:
+                                        perm.method === 'GET' ? '#60a5fa' :
+                                        perm.method === 'POST' ? '#4ade80' :
+                                        perm.method === 'PUT' ? '#fbbf24' :
+                                        perm.method === 'PATCH' ? '#c084fc' :
+                                        '#f87171',
+                                    }}
+                                  >
+                                    {perm.method}
+                                  </span>
+                                </div>
+                              </td>
+
+                              {MATRIX_COLUMNS.map((col) => (
+                                <td key={col.key} style={{ textAlign: 'center', padding: '10px 6px' }}>
+                                  {perm.method === col.key ? (
+                                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                                      <MatrixCheckbox
+                                        checked={isAssigned}
+                                        loading={!!cellLoading[perm.id]}
+                                        onChange={() => handleToggle(perm)}
+                                      />
+                                    </div>
+                                  ) : (
+                                    <span style={{ color: 'rgba(255,255,255,0.1)', fontSize: '0.7rem' }}>·</span>
+                                  )}
+                                </td>
+                              ))}
+                            </tr>
+                          );
+                        })}
+                      </React.Fragment>
+                    );
+                  })
                 )}
-              </div>
-            </div>
+              </tbody>
+            </table>
           </div>
         </div>
       )}
-
-      {/* Reusable Confirm Dialog */}
-      <ConfirmDialog
-        isOpen={confirmDialog.isOpen}
-        onClose={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
-        onConfirm={confirmDialog.onConfirm}
-        title={confirmDialog.title}
-        message={confirmDialog.message}
-        confirmText="Quitar permiso"
-        variant="danger"
-        loading={actionLoadingId !== null}
-      />
     </div>
   );
 }
-

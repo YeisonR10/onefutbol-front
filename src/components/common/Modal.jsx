@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
@@ -10,6 +10,8 @@ export default function Modal({
   footer,
   maxWidth = '550px',
 }) {
+  const titleId = useId();
+
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape' && isOpen) {
@@ -29,106 +31,29 @@ export default function Modal({
   if (!isOpen) return null;
 
   return createPortal((
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 1000,
-        backgroundColor: 'rgba(5, 8, 18, 0.82)',
-        backdropFilter: 'blur(5px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '20px',
-      }}
-      className="animate-fade-in"
-      onClick={onClose}
-    >
-      <div
-        style={{
-          width: '100%',
-          maxWidth,
-          backgroundColor: '#111827',
-          border: '1px solid #1e3a5f',
-          borderRadius: '12px',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.75)',
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-          maxHeight: '90vh',
-        }}
-        className="animate-slide-up"
-        onClick={(e) => e.stopPropagation()}
+    <div className="modal-backdrop animate-fade-in" onClick={onClose}>
+      <section
+        className="modal-dialog animate-slide-up"
+        style={{ maxWidth }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        onClick={(event) => event.stopPropagation()}
       >
-        {/* Modal Header */}
-        <div
-          style={{
-            padding: '16px 22px',
-            borderBottom: '1px solid #1e3a5f',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            background: '#0d1526',
-          }}
-        >
-          <h3
-            style={{
-              fontSize: '1.1rem',
-              fontWeight: 700,
-              color: '#ffffff',
-              letterSpacing: '-0.01em',
-            }}
-          >
-            {title}
-          </h3>
+        <div className="modal-header">
+          <h2 id={titleId}>{title}</h2>
           <button
+            type="button"
+            className="btn-icon modal-close"
             onClick={onClose}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: '#94a3b8',
-              cursor: 'pointer',
-              display: 'flex',
-              padding: '6px',
-              borderRadius: '6px',
-              transition: 'all 0.2s',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}
-            title="Cerrar modal"
+            aria-label="Cerrar ventana"
           >
             <X size={18} />
           </button>
         </div>
-
-        {/* Modal Body */}
-        <div
-          style={{
-            padding: '22px',
-            overflowY: 'auto',
-            flex: 1,
-          }}
-        >
-          {children}
-        </div>
-
-        {/* Modal Footer */}
-        {footer && (
-          <div
-            style={{
-              padding: '14px 22px',
-              borderTop: '1px solid #1e3a5f',
-              background: '#0d1526',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              gap: '12px',
-            }}
-          >
-            {footer}
-          </div>
-        )}
-      </div>
+        <div className="modal-body">{children}</div>
+        {footer && <div className="modal-footer">{footer}</div>}
+      </section>
     </div>
   ), document.body);
 }

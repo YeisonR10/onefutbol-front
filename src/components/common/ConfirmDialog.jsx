@@ -16,58 +16,22 @@ export default function ConfirmDialog({
   const getIcon = () => {
     if (variant === 'danger') {
       return (
-        <div
-          style={{
-            width: '44px',
-            height: '44px',
-            borderRadius: '50%',
-            background: 'var(--danger-dim)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--danger)',
-            flexShrink: 0,
-          }}
-        >
+        <span className="confirm-icon confirm-icon-danger" aria-hidden="true">
           <Trash2 size={22} />
-        </div>
+        </span>
       );
     }
     if (variant === 'warning') {
       return (
-        <div
-          style={{
-            width: '44px',
-            height: '44px',
-            borderRadius: '50%',
-            background: 'var(--warning-dim)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--warning)',
-            flexShrink: 0,
-          }}
-        >
+        <span className="confirm-icon confirm-icon-warning" aria-hidden="true">
           <AlertTriangle size={22} />
-        </div>
+        </span>
       );
     }
     return (
-      <div
-        style={{
-          width: '44px',
-          height: '44px',
-          borderRadius: '50%',
-          background: 'var(--accent-dim)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: 'var(--accent)',
-          flexShrink: 0,
-        }}
-      >
+      <span className="confirm-icon confirm-icon-primary" aria-hidden="true">
         <ShieldAlert size={22} />
-      </div>
+      </span>
     );
   };
 
@@ -111,13 +75,9 @@ export default function ConfirmDialog({
         </>
       }
     >
-      <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+      <div className="confirm-dialog-content">
         {getIcon()}
-        <div>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', lineHeight: 1.5 }}>
-            {message}
-          </p>
-        </div>
+        <p>{message}</p>
       </div>
     </Modal>
   );

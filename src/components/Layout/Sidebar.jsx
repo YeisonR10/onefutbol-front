@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, Users, ShieldCheck, KeyRound, ShieldAlert, Trophy } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import ProfileAccess from './ProfileAccess';
 
 const navItems = [
   { to: '/', label: 'Resumen', icon: LayoutDashboard },
@@ -12,9 +12,6 @@ const navItems = [
 ];
 
 export default function Sidebar() {
-  const { user } = useAuth();
-  const initials = user?.name?.trim()?.charAt(0).toUpperCase() || 'U';
-
   return (
     <aside className="sidebar" aria-label="Navegación principal">
       <div className="sidebar-brand">
@@ -35,13 +32,7 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      <div className="sidebar-user">
-        <span className="user-avatar" aria-hidden="true">{initials}</span>
-        <span className="sidebar-user-copy">
-          <strong>{user?.name || 'Administrador'}</strong>
-          <small><i aria-hidden="true" /> Sesión activa</small>
-        </span>
-      </div>
+      <ProfileAccess placement="sidebar" />
     </aside>
   );
 }

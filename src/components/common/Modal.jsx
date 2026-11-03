@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 export default function Modal({
@@ -27,7 +28,7 @@ export default function Modal({
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal((
     <div
       style={{
         position: 'fixed',
@@ -129,6 +130,6 @@ export default function Modal({
         )}
       </div>
     </div>
-  );
+  ), document.body);
 }
 

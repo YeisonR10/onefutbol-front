@@ -4,6 +4,7 @@ import { LogOut, Shield } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import ConfirmDialog from '../common/ConfirmDialog';
 import { useToast } from '../common/Toast';
+import ProfileAccess from './ProfileAccess';
 
 const pageTitles = {
   '/': ['Panel de control', 'Resumen del sistema de seguridad'],
@@ -48,13 +49,7 @@ export default function Header() {
         <div className="header-actions">
           <span className="platform-badge"><Shield size={15} aria-hidden="true" /> One<span>Sports</span></span>
           <span className="header-divider" aria-hidden="true" />
-          <div className="header-user">
-            <span className="user-avatar" aria-hidden="true">{user?.name?.trim()?.charAt(0).toUpperCase() || 'A'}</span>
-            <span className="header-user-copy">
-              <strong>{user?.name || 'Administrador'}</strong>
-              <small>{user?.email || 'admin@onesports.com'}</small>
-            </span>
-          </div>
+          <ProfileAccess placement="header" />
           <button type="button" className="btn btn-secondary btn-sm logout-button" onClick={() => setShowLogoutConfirm(true)}>
             <LogOut size={15} aria-hidden="true" /><span>Cerrar sesión</span>
           </button>

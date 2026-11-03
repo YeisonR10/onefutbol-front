@@ -44,28 +44,19 @@ export default function Table({
           </thead>
           <tbody>
             {loading ? (
-              <tr>
-                <td colSpan={columns.length} style={{ textAlign: 'center', padding: '48px 0' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-                    <div className="spinner spinner-lg"></div>
-                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.88rem' }}>
-                      Cargando datos...
-                    </span>
-                  </div>
-                </td>
-              </tr>
+              Array.from({ length: Math.min(itemsPerPage, 5) }, (_, rowIndex) => (
+                <tr key={`skeleton-${rowIndex}`} aria-hidden="true">
+                  {columns.map((col, colIndex) => (
+                    <td key={col.key || colIndex}>
+                      <span className="skeleton" style={{ display: 'block', width: colIndex === 0 ? '68%' : '48%', height: 14 }} />
+                    </td>
+                  ))}
+                </tr>
+              ))
             ) : paginatedData.length === 0 ? (
               <tr>
                 <td colSpan={columns.length} style={{ textAlign: 'center', padding: '48px 0' }}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: '10px',
-                      color: 'var(--text-muted)',
-                    }}
-                  >
+                  <div className="empty-state">
                     <Inbox size={36} strokeWidth={1.5} />
                     <p style={{ fontSize: '0.92rem' }}>{emptyMessage}</p>
                   </div>

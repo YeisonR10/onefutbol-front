@@ -121,6 +121,10 @@ export const authApi = {
       headers: challengeId ? { 'X-2FA-Challenge-Id': challengeId } : {},
     }),
   register: (userData) => client.post('/api/auth/register', userData),
+  forgotPassword: (email) => client.post('/api/auth/forgot-password', { email }),
+  verifyResetCode: (email, code) => client.post('/api/auth/reset-password/verify', { email, code }),
+  confirmResetPassword: (resetToken, newPassword) =>
+    client.post('/api/auth/reset-password/confirm', { resetToken, newPassword }),
 };
 
 export const usersApi = {

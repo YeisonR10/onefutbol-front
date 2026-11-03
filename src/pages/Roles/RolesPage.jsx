@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ShieldCheck,
@@ -11,8 +11,9 @@ import {
   X,
   Search,
   ExternalLink,
+  UserPlus,
 } from 'lucide-react';
-import { rolesApi, rolePermissionsApi } from '../../api/client';
+import { rolesApi, rolePermissionsApi, userRolesApi, usersApi } from '../../api/client';
 import Table from '../../components/common/Table';
 import Badge from '../../components/common/Badge';
 import Modal from '../../components/common/Modal';
@@ -29,6 +30,13 @@ export default function RolesPage() {
   const [selectedRole, setSelectedRole] = useState(null);
   const [selectedRolePermissions, setSelectedRolePermissions] = useState([]);
   const [loadingPermissions, setLoadingPermissions] = useState(false);
+  const [usersWithoutRoles, setUsersWithoutRoles] = useState([]);
+  const [roleUsers, setRoleUsers] = useState([]);
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [loadingRoleUsers, setLoadingRoleUsers] = useState(false);
+  const [assigningUser, setAssigningUser] = useState(false);
+  const selectedRoleIdRef = useRef(null);
 
   // Modal Create / Edit Role
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -41,6 +49,7 @@ export default function RolesPage() {
     isOpen: false,
     title: '',
     message: '',
+    confirmText: 'Confirmar',
     onConfirm: () => {},
   });
   const [confirmLoading, setConfirmLoading] = useState(false);
@@ -78,22 +87,82 @@ export default function RolesPage() {
 
   const handleSelectRole = async (role) => {
     setSelectedRole(role);
+    selectedRoleIdRef.current = role.id;
+    setSelectedUserId('');
     setLoadingPermissions(true);
-    try {
-      // First try getWithPermissions
+    setLoadingUsers(true);
+    setLoadingRoleUsers(true);
+
+    const permissionRequest = (async () => {
       const detail = await rolesApi.getWithPermissions(role.id).catch(() => null);
-      if (detail && detail.permissions) {
-        setSelectedRolePermissions(detail.permissions);
-      } else {
-        // Fallback to rolePermissionsApi.getByRoleId
-        const byRole = await rolePermissionsApi.getByRoleId(role.id).catch(() => []);
-        setSelectedRolePermissions(byRole || []);
+      if (detail && detail.permissions) return detail.permissions;
+      return (await rolePermissionsApi.getByRoleId(role.id).catch(() => [])) || [];
+    })();
+
+    const [permissionsResult, usersResult, roleUsersResult] = await Promise.allSettled([
+      permissionRequest,
+      usersApi.getWithoutRoles(),
+      userRolesApi.getByRoleId(role.id),
+    ]);
+
+    if (selectedRoleIdRef.current !== role.id) return;
+
+    if (permissionsResult.status === 'fulfilled') {
+      setSelectedRolePermissions(permissionsResult.value);
+    } else {
+      setSelectedRolePermissions([]);
+      showToast(permissionsResult.reason?.message || 'Error al obtener los permisos del rol', 'error');
+    }
+
+    if (usersResult.status === 'fulfilled') {
+      setUsersWithoutRoles(Array.isArray(usersResult.value) ? usersResult.value : []);
+    } else {
+      setUsersWithoutRoles([]);
+      showToast(usersResult.reason?.message || 'Error al obtener usuarios sin roles', 'error');
+    }
+
+    if (roleUsersResult.status === 'fulfilled') {
+      setRoleUsers(Array.isArray(roleUsersResult.value) ? roleUsersResult.value : []);
+    } else {
+      setRoleUsers([]);
+      showToast(roleUsersResult.reason?.message || 'Error al obtener usuarios asociados al rol', 'error');
+    }
+
+    setLoadingPermissions(false);
+    setLoadingUsers(false);
+    setLoadingRoleUsers(false);
+  };
+
+  const handleAssignUser = async () => {
+    if (!selectedRole || !selectedUserId) return;
+
+    setAssigningUser(true);
+    try {
+      await userRolesApi.assign({
+        userId: Number(selectedUserId),
+        roleId: selectedRole.id,
+      });
+      showToast(`Usuario asignado al rol "${selectedRole.name}"`, 'success');
+      setSelectedUserId('');
+    } catch (err) {
+      showToast(err.message || 'Error al asignar usuario al rol', 'error');
+      setAssigningUser(false);
+      return;
+    }
+
+    try {
+      const [users, associatedUsers] = await Promise.all([
+        usersApi.getWithoutRoles(),
+        userRolesApi.getByRoleId(selectedRole.id),
+      ]);
+      if (selectedRoleIdRef.current === selectedRole.id) {
+        setUsersWithoutRoles(Array.isArray(users) ? users : []);
+        setRoleUsers(Array.isArray(associatedUsers) ? associatedUsers : []);
       }
     } catch (err) {
-      console.error(err);
-      setSelectedRolePermissions([]);
+      showToast(err.message || 'No se pudieron actualizar los usuarios del rol', 'error');
     } finally {
-      setLoadingPermissions(false);
+      setAssigningUser(false);
     }
   };
 
@@ -142,6 +211,7 @@ export default function RolesPage() {
       isOpen: true,
       title: 'Eliminar Rol',
       message: `¿Está seguro de eliminar el rol "${role.name}"? Los usuarios asignados a este rol perderán sus permisos asociados.`,
+      confirmText: 'Eliminar rol',
       onConfirm: async () => {
         setConfirmLoading(true);
         try {
@@ -155,6 +225,45 @@ export default function RolesPage() {
           fetchRolesData();
         } catch (err) {
           showToast(err.message || 'Error al eliminar rol', 'error');
+        } finally {
+          setConfirmLoading(false);
+        }
+      },
+    });
+  };
+
+  const handleRemoveUserFromRole = (userId, userName) => {
+    if (!selectedRole || userId == null) return;
+
+    const role = selectedRole;
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Quitar usuario del rol',
+      message: `¿Desea quitar a "${userName}" del rol "${role.name}"?`,
+      confirmText: 'Quitar usuario',
+      onConfirm: async () => {
+        setConfirmLoading(true);
+        try {
+          await userRolesApi.remove(userId, role.id);
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+          showToast(`Usuario "${userName}" quitado del rol "${role.name}"`, 'success');
+        } catch (err) {
+          showToast(err.message || 'Error al quitar el usuario del rol', 'error');
+          setConfirmLoading(false);
+          return;
+        }
+
+        try {
+          const [users, associatedUsers] = await Promise.all([
+            usersApi.getWithoutRoles(),
+            userRolesApi.getByRoleId(role.id),
+          ]);
+          if (selectedRoleIdRef.current === role.id) {
+            setUsersWithoutRoles(Array.isArray(users) ? users : []);
+            setRoleUsers(Array.isArray(associatedUsers) ? associatedUsers : []);
+          }
+        } catch (err) {
+          showToast(err.message || 'No se pudo actualizar la lista de usuarios del rol', 'error');
         } finally {
           setConfirmLoading(false);
         }
@@ -372,8 +481,11 @@ export default function RolesPage() {
               <button
                 className="btn-icon"
                 onClick={() => {
+                  selectedRoleIdRef.current = null;
                   setSelectedRole(null);
                   setSelectedRolePermissions([]);
+                  setUsersWithoutRoles([]);
+                  setRoleUsers([]);
                 }}
                 title="Cerrar panel"
               >
@@ -396,6 +508,122 @@ export default function RolesPage() {
               <span>Gestionar permisos en Matriz</span>
               <ExternalLink size={16} />
             </button>
+
+            <div
+              style={{
+                padding: '14px',
+                backgroundColor: 'var(--bg-secondary)',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+              }}
+            >
+              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#ffffff', marginBottom: '10px' }}>
+                Usuarios asociados ({roleUsers.length})
+              </div>
+              {loadingRoleUsers ? (
+                <div style={{ textAlign: 'center', padding: '12px 0' }}>
+                  <div className="spinner"></div>
+                </div>
+              ) : roleUsers.length === 0 ? (
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  Este rol aún no tiene usuarios asociados.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {roleUsers.map((association, index) => {
+                    const associatedUser = association.user || association;
+                    const userId = associatedUser.id ?? association.userId;
+                    return (
+                      <div
+                        key={association.id || userId || index}
+                        style={{
+                          padding: '9px 11px',
+                          backgroundColor: '#111827',
+                          border: '1px solid var(--border)',
+                          borderRadius: '7px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '8px',
+                        }}
+                      >
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#ffffff' }}>
+                            {associatedUser.name || associatedUser.fullName || `Usuario #${userId ?? '—'}`}
+                          </div>
+                          {associatedUser.email && (
+                            <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', marginTop: '3px' }}>
+                              {associatedUser.email}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          className="btn-icon"
+                          title="Quitar usuario de este rol"
+                          aria-label={`Quitar a ${associatedUser.name || associatedUser.fullName || `usuario ${userId}`} del rol`}
+                          disabled={confirmLoading || userId == null}
+                          onClick={() =>
+                            handleRemoveUserFromRole(
+                              userId,
+                              associatedUser.name || associatedUser.fullName || `Usuario #${userId}`
+                            )
+                          }
+                        >
+                          <Trash2 size={16} color="#ef4444" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div
+              style={{
+                padding: '14px',
+                backgroundColor: 'var(--bg-secondary)',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+              }}
+            >
+              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#ffffff', marginBottom: '10px' }}>
+                Asignar usuario a este rol
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <select
+                  aria-label="Usuario sin rol"
+                  value={selectedUserId}
+                  onChange={(e) => setSelectedUserId(e.target.value)}
+                  disabled={loadingUsers || assigningUser}
+                  style={{ fontSize: '0.82rem', padding: '6px 10px', flex: 1, minWidth: 0 }}
+                >
+                  <option value="">
+                    {loadingUsers ? 'Cargando usuarios...' : 'Seleccione usuario...'}
+                  </option>
+                  {usersWithoutRoles.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name || user.email || `Usuario #${user.id}`}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={handleAssignUser}
+                  disabled={!selectedUserId || loadingUsers || assigningUser}
+                  style={{ padding: '6px 10px' }}
+                >
+                  <UserPlus size={15} />
+                  <span>{assigningUser ? 'Asignando...' : 'Asignar'}</span>
+                </button>
+              </div>
+              {!loadingUsers && usersWithoutRoles.length === 0 && (
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '8px' }}>
+                  No hay usuarios disponibles sin rol.
+                </div>
+              )}
+            </div>
 
             {/* List of Permissions */}
             <div>
@@ -555,11 +783,10 @@ export default function RolesPage() {
         onConfirm={confirmDialog.onConfirm}
         title={confirmDialog.title}
         message={confirmDialog.message}
-        confirmText="Eliminar rol"
+        confirmText={confirmDialog.confirmText}
         variant="danger"
         loading={confirmLoading}
       />
     </div>
   );
 }
-

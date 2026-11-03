@@ -123,6 +123,7 @@ export const authApi = {
 
 export const usersApi = {
   getAll: () => client.get('/api/users'),
+  getWithoutRoles: () => client.get('/api/users/without-roles'),
   getById: (id) => client.get(`/api/users/${id}`),
   getDetail: (id) => client.get(`/api/users/${id}/detail`),
   getWithRoles: (id) => client.get(`/api/users/${id}/detail-with-roles`),
@@ -183,4 +184,3 @@ export const sessionsApi = {
 };
 
 export default client;
-

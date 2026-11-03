@@ -153,6 +153,16 @@ export function AuthProvider({ children }) {
     return completeLogin(jwtToken, email, response);
   };
 
+  const loginWithOAuth = async (provider, payload) => {
+    const response = await authApi.exchangeOAuthCode(provider, payload);
+    const jwtToken = response?.accessToken || response?.token;
+    if (!jwtToken) {
+      throw new Error('No se recibió el token de autenticación del proveedor');
+    }
+    const decoded = parseJwt(jwtToken);
+    return completeLogin(jwtToken, decoded?.email || '', response);
+  };
+
   const register = async (name, email, password) => {
     return await authApi.register({ name, email, password });
   };
@@ -172,6 +182,7 @@ export function AuthProvider({ children }) {
     refreshUserProfile,
     login,
     verify2FA,
+    loginWithOAuth,
     register,
     logout,
   };

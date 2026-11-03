@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import Layout from './components/Layout/Layout';
 import LoginPage from './pages/Login/LoginPage';
+import OAuthCallbackPage from './pages/Login/OAuthCallbackPage';
 import DashboardPage from './pages/Dashboard/DashboardPage';
 import UsersPage from './pages/Users/UsersPage';
 import RolesPage from './pages/Roles/RolesPage';
@@ -47,6 +48,7 @@ export default function App() {
     <Routes>
       {/* Public Route */}
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/auth/callback/:provider" element={<OAuthCallbackPage />} />
 
       {/* Protected Layout Routes */}
       <Route

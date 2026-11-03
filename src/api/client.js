@@ -114,6 +114,8 @@ export const client = {
 /* Specific API Services */
 export const authApi = {
   login: (credentials) => client.post('/api/auth/login', credentials),
+  createOAuthState: (provider) => client.post(`/api/auth/oauth/${provider}/state`, {}),
+  exchangeOAuthCode: (provider, data) => client.post(`/api/auth/oauth/${provider}`, data),
   verify2FA: (data, challengeId) =>
     client.post('/api/auth/2fa/verify', data, {
       headers: challengeId ? { 'X-2FA-Challenge-Id': challengeId } : {},

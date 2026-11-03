@@ -1,8 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Trophy, Mail, Lock, Eye, EyeOff, ShieldCheck, AlertCircle, KeyRound, ArrowLeft } from 'lucide-react';
+import { Trophy, Mail, Lock, Eye, EyeOff, ShieldCheck, AlertCircle, KeyRound, ArrowLeft, Github, Chrome } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../components/common/Toast';
+import { authApi } from '../../api/client';
+
+function base64Url(bytes) {
+  let binary = '';
+  for (const byte of new Uint8Array(bytes)) binary += String.fromCharCode(byte);
+  return window.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+async function createPkcePair() {
+  const random = crypto.getRandomValues(new Uint8Array(32));
+  const verifier = base64Url(random);
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+  return { verifier, challenge: base64Url(digest) };
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -82,6 +96,46 @@ export default function LoginPage() {
     setIs2FAStep(false);
     setTwoFACode('');
     setErrorMessage('');
+  };
+
+  const handleOAuthLogin = async (provider) => {
+    setErrorMessage('');
+    const clientId = provider === 'google'
+      ? import.meta.env.VITE_GOOGLE_CLIENT_ID
+      : import.meta.env.VITE_GITHUB_CLIENT_ID;
+    if (!clientId) {
+      setErrorMessage(`Falta configurar VITE_${provider.toUpperCase()}_CLIENT_ID en el frontend.`);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { state } = await authApi.createOAuthState(provider);
+      const { verifier, challenge } = await createPkcePair();
+      const redirectUri = `${window.location.origin}/auth/callback/${provider}`;
+      sessionStorage.setItem(`oauth_${provider}_state`, state);
+      sessionStorage.setItem(`oauth_${provider}_verifier`, verifier);
+      sessionStorage.setItem('oauth_return_to', location.state?.from?.pathname || '/');
+
+      const authorizationUrl = provider === 'google'
+        ? new URL('https://accounts.google.com/o/oauth2/v2/auth')
+        : new URL('https://github.com/login/oauth/authorize');
+      const params = authorizationUrl.searchParams;
+      params.set('client_id', clientId);
+      params.set('redirect_uri', redirectUri);
+      params.set('response_type', 'code');
+      params.set('state', state);
+      params.set('code_challenge', challenge);
+      params.set('code_challenge_method', 'S256');
+      params.set('scope', provider === 'google' ? 'openid email profile' : 'read:user user:email');
+      if (provider === 'google') params.set('prompt', 'select_account');
+      window.location.assign(authorizationUrl.toString());
+    } catch (error) {
+      const message = error.message || `No se pudo iniciar sesión con ${provider}.`;
+      setErrorMessage(message);
+      showToast(message, 'error');
+      setLoading(false);
+    }
   };
 
   return (
@@ -301,6 +355,33 @@ export default function LoginPage() {
                   'Iniciar sesión'
                 )}
               </button>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                <span style={{ height: 1, flex: 1, background: 'var(--border)' }} />
+                <span>O continúa con</span>
+                <span style={{ height: 1, flex: 1, background: 'var(--border)' }} />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: -8 }}>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => handleOAuthLogin('google')}
+                  disabled={loading}
+                  style={{ minHeight: 44, width: '100%' }}
+                >
+                  <Chrome size={18} /> Google
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => handleOAuthLogin('github')}
+                  disabled={loading}
+                  style={{ minHeight: 44, width: '100%' }}
+                >
+                  <Github size={18} /> GitHub
+                </button>
+              </div>
             </>
           ) : (
             <>

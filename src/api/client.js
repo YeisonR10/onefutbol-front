@@ -15,7 +15,7 @@ async function request(endpoint, options = {}) {
   };
 
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    headers['Authorization'] = 'Bearer ' + token;
   }
 
   const config = {
@@ -205,6 +205,71 @@ export const sessionsApi = {
   getById: (userId, sessionId) => client.get(`/api/users/${userId}/sessions/${sessionId}`),
   update: (userId, sessionId, data) => client.put(`/api/users/${userId}/sessions/${sessionId}`, data),
   delete: (userId, sessionId) => client.delete(`/api/users/${userId}/sessions/${sessionId}`),
+};
+
+export const deportesApi = {
+  getAll: () => client.get('/api/deportes'),
+  getById: (id) => client.get(`/api/deportes/${id}`),
+  getSubdeportes: (id) => client.get(`/api/deportes/${id}/subdeportes`),
+  getEquipos: (id) => client.get(`/api/deportes/${id}/equipos`),
+  create: (data) => client.post('/api/deportes', data),
+  update: (id, data) => client.patch(`/api/deportes/${id}`, data),
+  delete: (id) => client.delete(`/api/deportes/${id}`),
+};
+
+export const equiposApi = {
+  getAll: () => client.get('/api/equipos'),
+  getById: (id) => client.get(`/api/equipos/${id}`),
+  getDeportes: (id) => client.get(`/api/equipos/${id}/deportes`),
+  getJugadores: (id) => client.get(`/api/equipos/${id}/jugadores`),
+  create: (data) => client.post('/api/equipos', data),
+  update: (id, data) => client.patch(`/api/equipos/${id}`, data),
+  delete: (id) => client.delete(`/api/equipos/${id}`),
+};
+
+export const jugadoresApi = {
+  getAll: () => client.get('/api/jugadores'),
+  getById: (id) => client.get(`/api/jugadores/${id}`),
+  getEquipos: (id) => client.get(`/api/jugadores/${id}/equipos`),
+  getHabilidades: (id) => client.get(`/api/jugadores/${id}/habilidades`),
+  getPerfil: (id) => client.get(`/api/jugadores/${id}/perfil`),
+  create: (data) => client.post('/api/jugadores', data),
+  update: (id, data) => client.patch(`/api/jugadores/${id}`, data),
+  delete: (id) => client.delete(`/api/jugadores/${id}`),
+};
+
+export const habilidadesApi = {
+  getAll: () => client.get('/api/habilidades'),
+  getById: (id) => client.get(`/api/habilidades/${id}`),
+  getJugadores: (id) => client.get(`/api/habilidades/${id}/jugadores`),
+  create: (data) => client.post('/api/habilidades', data),
+  update: (id, data) => client.patch(`/api/habilidades/${id}`, data),
+  delete: (id) => client.delete(`/api/habilidades/${id}`),
+};
+
+export const equiposDeportesApi = {
+  getAll: () => client.get('/api/equipos-deportes'),
+  getById: (id) => client.get(`/api/equipos-deportes/${id}`),
+  create: (data) => client.post('/api/equipos-deportes', data),
+  update: (id, data) => client.patch(`/api/equipos-deportes/${id}`, data),
+  delete: (id) => client.delete(`/api/equipos-deportes/${id}`),
+};
+
+export const habilidadesJugadoresApi = {
+  getAll: () => client.get('/api/habilidades-jugadores'),
+  getById: (id) => client.get(`/api/habilidades-jugadores/${id}`),
+  create: (data) => client.post('/api/habilidades-jugadores', data),
+  update: (id, data) => client.patch(`/api/habilidades-jugadores/${id}`, data),
+  delete: (id) => client.delete(`/api/habilidades-jugadores/${id}`),
+};
+
+export const contratosApi = {
+  getAll: () => client.get('/api/contratos'),
+  getById: (id) => client.get(`/api/contratos/${id}`),
+  create: (data) => client.post('/api/contratos', data),
+  update: (id, data) => client.patch(`/api/contratos/${id}`, data),
+  finalizar: (id) => client.patch(`/api/contratos/${id}/finalizar`),
+  delete: (id) => client.delete(`/api/contratos/${id}`),
 };
 
 export default client;

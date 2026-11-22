@@ -9,6 +9,7 @@ const navItems = [
   { to: '/roles', label: 'Roles', icon: ShieldCheck },
   { to: '/permissions', label: 'Permisos', icon: KeyRound },
   { to: '/security', label: 'Seguridad', icon: ShieldAlert },
+  { to: '/sports', label: 'Gestion Deportiva', icon: Trophy },
 ];
 
 export default function Sidebar() {

@@ -10,6 +10,7 @@ import RolesPage from './pages/Roles/RolesPage';
 import PermissionsPage from './pages/Permissions/PermissionsPage';
 import SecurityPage from './pages/Security/SecurityPage';
 import SportsPage from './pages/Sports/SportsPage';
+import TournamentsPage from './pages/Tournaments/TournamentsPage';
 
 // Protected Route Component
 function ProtectedRoute({ children }) {
@@ -66,6 +67,7 @@ export default function App() {
         <Route path="permissions" element={<PermissionsPage />} />
         <Route path="security" element={<SecurityPage />} />
         <Route path="sports" element={<SportsPage />} />
+        <Route path="tournaments" element={<TournamentsPage />} />
       </Route>
 
       {/* Catch-all fallback */}

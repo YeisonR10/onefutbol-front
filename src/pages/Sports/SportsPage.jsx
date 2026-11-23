@@ -97,7 +97,16 @@ export default function SportsPage() {
 
   const openEdit = (type, item) => {
     const mapped = {
-      deporte: { ...item, deportePadreId: item.deportePadre?.id ?? null },
+      deporte: {
+        nombre: item.nombre,
+        descripcion: item.descripcion ?? '',
+        esColectivo: item.esColectivo,
+        minJugadores: item.minJugadores,
+        maxJugadores: item.maxJugadores,
+        activo: item.activo,
+        deportePadreId: item.deportePadreId ?? item.deportePadre?.id ?? null,
+        id: item.id,
+      },
       equipo: item,
       jugador: item,
       habilidad: item,
@@ -116,7 +125,20 @@ export default function SportsPage() {
     try {
       const { type, mode } = modal;
       const id = form.id;
-      if (type === 'deporte') mode === 'create' ? await deportesApi.create(form) : await deportesApi.update(id, form);
+      if (type === 'deporte') {
+        const deportePayload = {
+          nombre: form.nombre,
+          descripcion: form.descripcion ?? '',
+          esColectivo: form.esColectivo,
+          minJugadores: Number(form.minJugadores),
+          maxJugadores: Number(form.maxJugadores),
+          activo: form.activo,
+          deportePadreId: form.deportePadreId == null || form.deportePadreId === '' ? null : Number(form.deportePadreId),
+        };
+        mode === 'create'
+          ? await deportesApi.create(deportePayload)
+          : await deportesApi.update(id, deportePayload);
+      }
       if (type === 'equipo') mode === 'create' ? await equiposApi.create(form) : await equiposApi.update(id, form);
       if (type === 'jugador') mode === 'create' ? await jugadoresApi.create(form) : await jugadoresApi.update(id, form);
       if (type === 'habilidad') mode === 'create' ? await habilidadesApi.create(form) : await habilidadesApi.update(id, form);

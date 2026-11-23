@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, ShieldCheck, KeyRound, ShieldAlert, Trophy } from 'lucide-react';
+import { LayoutDashboard, Users, ShieldCheck, KeyRound, ShieldAlert, Trophy, Swords } from 'lucide-react';
 import ProfileAccess from './ProfileAccess';
 
 const navItems = [
@@ -10,6 +10,7 @@ const navItems = [
   { to: '/permissions', label: 'Permisos', icon: KeyRound },
   { to: '/security', label: 'Seguridad', icon: ShieldAlert },
   { to: '/sports', label: 'Gestion Deportiva', icon: Trophy },
+  { to: '/tournaments', label: 'Torneos', icon: Swords },
 ];
 
 export default function Sidebar() {

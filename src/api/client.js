@@ -272,4 +272,74 @@ export const contratosApi = {
   delete: (id) => client.delete(`/api/contratos/${id}`),
 };
 
+export const torneosApi = {
+  getAll: () => client.get('/api/torneos'),
+  getById: (id) => client.get(`/api/torneos/${id}`),
+  getFases: (id) => client.get(`/api/torneos/${id}/fases`),
+  getInscripciones: (id) => client.get(`/api/torneos/${id}/inscripciones`),
+  getEscenarios: (id) => client.get(`/api/torneos/${id}/escenarios`),
+  create: (data) => client.post('/api/torneos', data),
+  update: (id, data) => client.patch(`/api/torneos/${id}`, data),
+  delete: (id) => client.delete(`/api/torneos/${id}`),
+};
+
+export const inscripcionesApi = {
+  getAll: () => client.get('/api/inscripciones'),
+  getById: (id) => client.get(`/api/inscripciones/${id}`),
+  create: (data) => client.post('/api/inscripciones', data),
+  update: (id, data) => client.patch(`/api/inscripciones/${id}`, data),
+  delete: (id) => client.delete(`/api/inscripciones/${id}`),
+};
+
+export const fasesApi = {
+  getAll: () => client.get('/api/fases'),
+  getById: (id) => client.get(`/api/fases/${id}`),
+  getPartidos: (id) => client.get(`/api/fases/${id}/partidos`),
+  getGrupos: (id) => client.get(`/api/fases/${id}/grupos`),
+  getFinal: (id) => client.get(`/api/fases/${id}/final`),
+  create: (data) => client.post('/api/fases', data),
+  update: (id, data) => client.patch(`/api/fases/${id}`, data),
+  delete: (id) => client.delete(`/api/fases/${id}`),
+};
+
+export const gruposApi = {
+  getAll: () => client.get('/api/grupos'),
+  getById: (id) => client.get(`/api/grupos/${id}`),
+  getEquipos: (id) => client.get(`/api/grupos/${id}/equipos`),
+  create: (data) => client.post('/api/grupos', data),
+  update: (id, data) => client.patch(`/api/grupos/${id}`, data),
+  delete: (id) => client.delete(`/api/grupos/${id}`),
+};
+
+export const finalesApi = {
+  getAll: () => client.get('/api/finales'),
+  getById: (id) => client.get(`/api/finales/${id}`),
+  create: (data) => client.post('/api/finales', data),
+  update: (id, data) => client.patch(`/api/finales/${id}`, data),
+  delete: (id) => client.delete(`/api/finales/${id}`),
+};
+
+export const partidosApi = {
+  getAll: () => client.get('/api/partidos'),
+  getById: (id) => client.get(`/api/partidos/${id}`),
+  getBoletos: (id) => client.get(`/api/partidos/${id}/boletos`),
+  getApuestas: (id) => client.get(`/api/partidos/${id}/apuestas`),
+  create: (data) => client.post('/api/partidos', data),
+  update: (id, data) => client.patch(`/api/partidos/${id}`, data),
+  delete: (id) => client.delete(`/api/partidos/${id}`),
+};
+
+export const anotacionesApi = {
+  getAll: () => client.get('/api/anotaciones'),
+  getById: (id) => client.get(`/api/anotaciones/${id}`),
+  create: (data) => client.post('/api/anotaciones', data),
+  update: (id, data) => client.patch(`/api/anotaciones/${id}`, data),
+  delete: (id) => client.delete(`/api/anotaciones/${id}`),
+};
+
+export const escenariosApi = {
+  getAll: () => client.get('/api/escenarios'),
+  getById: (id) => client.get(`/api/escenarios/${id}`),
+};
+
 export default client;

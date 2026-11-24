@@ -20,7 +20,9 @@ import {
   equiposDeportesApi,
   habilidadesApi,
   habilidadesJugadoresApi,
+  inscripcionesApi,
   jugadoresApi,
+  torneosApi,
 } from '../../api/client';
 import Table from '../../components/common/Table';
 import Modal from '../../components/common/Modal';
@@ -224,6 +226,9 @@ export default function SportsPage() {
   const [selectedTeam, setSelectedTeam] = useState(null);
   const [teamDetails, setTeamDetails] = useState(null);
   const [teamDetailsLoading, setTeamDetailsLoading] = useState(false);
+  const [teamTournamentData, setTeamTournamentData] = useState(null);
+  const [teamTournamentsError, setTeamTournamentsError] = useState('');
+  const [teamTournamentSportFilter, setTeamTournamentSportFilter] = useState('all');
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [playerDetails, setPlayerDetails] = useState(null);
   const [playerDetailsLoading, setPlayerDetailsLoading] = useState(false);
@@ -501,6 +506,9 @@ export default function SportsPage() {
   const openTeamDetails = async (team) => {
     setSelectedTeam(team);
     setTeamDetails(null);
+    setTeamTournamentData(null);
+    setTeamTournamentsError('');
+    setTeamTournamentSportFilter('all');
     setTeamDetailsLoading(true);
     try {
       const [details, sports, players] = await Promise.all([
@@ -513,6 +521,20 @@ export default function SportsPage() {
         { endpoint: `/equipos/${team.id}/deportes`, data: sports },
         { endpoint: `/equipos/${team.id}/jugadores`, data: players },
       ]);
+      try {
+        const [tournaments, registrations] = await Promise.all([
+          torneosApi.getAll(),
+          inscripcionesApi.getAll(),
+        ]);
+        setTeamTournamentData({
+          tournaments: getRelatedRecords(tournaments, ['torneos']),
+          registrations: getRelatedRecords(registrations, ['inscripciones']),
+        });
+      } catch (error) {
+        const message = error.message || 'No se pudieron consultar los torneos asociados al equipo';
+        setTeamTournamentsError(message);
+        showToast(message, 'error');
+      }
     } catch (error) {
       showToast(error.message || 'No se pudieron consultar los detalles del equipo', 'error');
       setSelectedTeam(null);
@@ -1131,6 +1153,59 @@ export default function SportsPage() {
           const shieldUrl = getTeamShieldUrl(team);
           const sports = getRelatedRecords(teamDetails[1]?.data, ['deportes']);
           const players = getRelatedRecords(teamDetails[2]?.data, ['jugadores']).filter(isAssociationContractActive);
+          const teamSports = sports.map((association) => {
+            const relatedSport = association.deporte || association.sport || association;
+            const id = getAssociationId(association, 'deporte', deportes)
+              ?? getAssociationId(association, 'sport', deportes)
+              ?? relatedSport.id
+              ?? association.deporteId
+              ?? association.deporte_id;
+            const name = relatedSport.nombre
+              || association.deporteNombre
+              || association.deporte_nombre
+              || deportes.find((sport) => String(sport.id) === String(id))?.nombre
+              || (id != null ? `Deporte #${id}` : 'Deporte');
+            return { id, name };
+          }).filter((sport, index, list) => sport.id != null
+            && list.findIndex((candidate) => String(candidate.id) === String(sport.id)) === index);
+          const teamRegistrations = (teamTournamentData?.registrations || []).filter((registration) => {
+            const registrationTeamId = getAssociationId(registration, 'equipo', equipos);
+            if (registrationTeamId != null) return String(registrationTeamId) === String(team.id);
+            return getAssociationName(registration, 'equipo', equipos, 'Equipo').toLowerCase()
+              === String(team.nombre || selectedTeam?.nombre || '').toLowerCase();
+          });
+          const tournamentById = new Map(
+            (teamTournamentData?.tournaments || []).map((tournament) => [String(tournament.id), tournament]),
+          );
+          const associatedTournamentMap = new Map();
+          teamRegistrations.forEach((registration) => {
+            const registrationTournamentId = getAssociationId(registration, 'torneo');
+            const relatedTournament = registration.torneo && typeof registration.torneo === 'object'
+              ? registration.torneo
+              : null;
+            const tournament = relatedTournament
+              || tournamentById.get(String(registrationTournamentId))
+              || (typeof registration.torneo === 'string' && Number.isNaN(Number(registration.torneo))
+                ? (teamTournamentData?.tournaments || []).find((item) => item.nombre === registration.torneo)
+                : null);
+            const tournamentId = tournament?.id ?? registrationTournamentId;
+            if (tournament && tournamentId != null) {
+              const key = String(tournamentId);
+              if (!associatedTournamentMap.has(key)) {
+                associatedTournamentMap.set(key, { id: tournamentId, tournament, registration });
+              }
+            }
+          });
+          const associatedTournaments = Array.from(associatedTournamentMap.values());
+          const getTournamentSportId = (tournament) => getAssociationId(tournament, 'deporte', deportes)
+            ?? getAssociationId(tournament, 'sport', deportes)
+            ?? tournament.deporteId
+            ?? tournament.deporte_id
+            ?? null;
+          const filteredTournaments = associatedTournaments.filter(({ tournament }) =>
+            teamTournamentSportFilter === 'all'
+            || String(getTournamentSportId(tournament)) === teamTournamentSportFilter);
+          const formatDate = (value) => value ? String(value).split('T')[0] : '—';
           const teamFields = getDetailFields(team, [
             'nombre', 'siglas', 'ciudad', 'pais', 'fechaFundacion', 'activo', 'activa',
             'escudo', 'escudoUrl', 'imagenEscudo', 'logo',
@@ -1237,6 +1312,83 @@ export default function SportsPage() {
                     {sports.map((sport, index) => renderTeamRelationCard(sport, 'Deporte', index))}
                   </div>
                 ) : <p style={{ color: 'var(--text-secondary)', margin: 0 }}>Este equipo todavía no tiene deportes asociados.</p>}
+              </section>
+
+              <section>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <h3 style={{ color: '#fff', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}><Trophy size={18} /> Torneos asociados</h3>
+                    <span className="badge badge-neutral">{filteredTournaments.length}</span>
+                  </div>
+                  {teamSports.length > 0 && (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)', fontSize: '0.86rem' }}>
+                      Filtrar por deporte
+                      <select
+                        value={teamTournamentSportFilter}
+                        onChange={(event) => setTeamTournamentSportFilter(event.target.value)}
+                        style={{ width: 'auto', minWidth: 150 }}
+                      >
+                        <option value="all">Todos los deportes</option>
+                        {teamSports.map((sport) => <option key={sport.id} value={sport.id}>{sport.name}</option>)}
+                      </select>
+                    </label>
+                  )}
+                </div>
+                {teamTournamentsError ? (
+                  <p style={{ color: 'var(--text-secondary)', margin: 0 }}>{teamTournamentsError}</p>
+                ) : !teamTournamentData ? (
+                  <p style={{ color: 'var(--text-secondary)', margin: 0 }}>Consultando torneos asociados...</p>
+                ) : filteredTournaments.length ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
+                    {filteredTournaments.map(({ id, tournament, registration }) => {
+                      const tournamentSportId = getTournamentSportId(tournament);
+                      const tournamentSportName = tournament.deporte?.nombre
+                        || tournament.sport?.nombre
+                        || teamSports.find((sport) => String(sport.id) === String(tournamentSportId))?.name
+                        || deportes.find((sport) => String(sport.id) === String(tournamentSportId))?.nombre
+                        || 'Deporte no especificado';
+                      const active = tournament.activo ?? tournament.activa;
+                      return (
+                        <article key={id} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 16, background: 'var(--bg-secondary)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                              <span style={{ display: 'grid', placeItems: 'center', width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: 'var(--accent-soft)', color: 'var(--accent)' }}><Trophy size={19} /></span>
+                              <div style={{ minWidth: 0 }}>
+                                <h4 style={{ color: '#fff', margin: 0, overflowWrap: 'anywhere' }}>{tournament.nombre || `Torneo #${tournament.id}`}</h4>
+                                <p style={{ color: 'var(--text-secondary)', margin: '4px 0 0', fontSize: '0.84rem' }}>
+                                  {[tournament.edicion, tournamentSportName].filter(Boolean).join(' · ')}
+                                </p>
+                              </div>
+                            </div>
+                            {typeof active === 'boolean' && (
+                              <span className={`badge ${active ? 'badge-active' : 'badge-inactive'}`}>{active ? 'Activo' : 'Inactivo'}</span>
+                            )}
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 12, marginTop: 16 }}>
+                            <div>
+                              <div style={{ color: 'var(--text-muted)', fontSize: '0.74rem', marginBottom: 3 }}>Inicio</div>
+                              <div style={{ color: 'var(--text-primary)', fontSize: '0.86rem' }}>{formatDate(tournament.fechaInicio)}</div>
+                            </div>
+                            <div>
+                              <div style={{ color: 'var(--text-muted)', fontSize: '0.74rem', marginBottom: 3 }}>Fin</div>
+                              <div style={{ color: 'var(--text-primary)', fontSize: '0.86rem' }}>{formatDate(tournament.fechaFin)}</div>
+                            </div>
+                            <div>
+                              <div style={{ color: 'var(--text-muted)', fontSize: '0.74rem', marginBottom: 3 }}>Inscripción</div>
+                              <div style={{ color: 'var(--text-primary)', fontSize: '0.86rem' }}>{registration.estado || 'Registrado'}</div>
+                            </div>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p style={{ color: 'var(--text-secondary)', margin: 0 }}>
+                    {associatedTournaments.length
+                      ? 'No hay torneos de este deporte asociados al equipo.'
+                      : 'Este equipo todavía no tiene inscripciones en torneos.'}
+                  </p>
+                )}
               </section>
 
               <section>

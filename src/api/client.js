@@ -289,6 +289,10 @@ export const torneosApi = {
   delete: (id) => client.delete(`/api/torneos/${id}`),
 };
 
+export const aficionadosApi = {
+  getAll: () => client.get('/api/aficionados'),
+};
+
 export const inscripcionesApi = {
   getAll: () => client.get('/api/inscripciones'),
   getById: (id) => client.get(`/api/inscripciones/${id}`),

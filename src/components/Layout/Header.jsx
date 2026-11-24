@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { LogOut, Shield } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import ConfirmDialog from '../common/ConfirmDialog';
+import NotificationBell from '../common/NotificationBell';
 import { useToast } from '../common/Toast';
 import ProfileAccess from './ProfileAccess';
 
@@ -47,6 +48,7 @@ export default function Header() {
           <p>{subtitle}</p>
         </div>
         <div className="header-actions">
+          <NotificationBell />
           <span className="platform-badge"><Shield size={15} aria-hidden="true" /> One<span>Sports</span></span>
           <span className="header-divider" aria-hidden="true" />
           <ProfileAccess placement="header" />

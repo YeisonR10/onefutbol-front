@@ -12,6 +12,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
+      '/api/aficionados': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
       '/api/inscripciones': {
         target: 'http://localhost:4000',
         changeOrigin: true,
@@ -85,7 +90,12 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8181',
         changeOrigin: true,
-      }
+      },
+      '/socket.io': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+        ws: true,
+      },
     }
   }
 })

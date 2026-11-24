@@ -24,7 +24,13 @@ async function request(endpoint, options = {}) {
     headers,
   };
 
-  if (config.body && typeof config.body === 'object' && !(config.body instanceof FormData)) {
+  const isFormData = typeof FormData !== 'undefined' && config.body instanceof FormData;
+  if (isFormData) {
+    delete headers['Content-Type'];
+    delete headers['content-type'];
+  }
+
+  if (config.body && typeof config.body === 'object' && !isFormData) {
     config.body = JSON.stringify(config.body);
   }
 

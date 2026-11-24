@@ -150,6 +150,15 @@ input, select, textarea {
   color: var(--text-primary);
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
 }
+.sports-form-compact-checkboxes input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  min-height: 16px;
+  flex: 0 0 16px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
 textarea { min-height: 96px; resize: vertical; }
 input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: 0.86; }
 input:hover:not(:disabled), select:hover:not(:disabled), textarea:hover:not(:disabled) { border-color: rgba(164, 180, 204, 0.4); }
